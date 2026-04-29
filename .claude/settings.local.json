@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sc query *)",
+      "Bash(netstat -ano)",
+      "Bash(mysql -u root -p -e \"CREATE DATABASE IF NOT EXISTS testplatform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")",
+      "Bash(sc stop *)",
+      "Bash(net start *)",
+      "Bash(net stop *)",
+      "Bash(mysql -u root -pzzh000801 -e \"SELECT 'Password reset successful!' as Status;\")",
+      "Bash(mysql -u root -pzzh000801 -e \"SELECT 'Password works!' as Status, VERSION\\(\\) as MySQL_Version;\")",
+      "Bash(mysql -u root -e \"SELECT 'Connected!' as Status;\")"
+    ]
+  }
+}
