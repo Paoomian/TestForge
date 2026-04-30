@@ -10,7 +10,7 @@ from models import User
 router = APIRouter()
 
 
-@router.get("/", response_model=List[ProjectInDB])
+@router.get("", response_model=List[ProjectInDB])
 def list_projects(
     skip: int = 0,
     limit: int = 100,
@@ -21,7 +21,7 @@ def list_projects(
     return projects
 
 
-@router.post("/", response_model=ProjectInDB)
+@router.post("", response_model=ProjectInDB)
 def create_project(
     project_in: ProjectCreate,
     db: Session = Depends(get_db),

@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/api-test/CaseList.vue')
       },
       {
+        path: 'api-test-manage',
+        name: 'api-test-manage',
+        component: () => import('@/views/api-test/TestCaseManage.vue')
+      },
+      {
         path: 'api-record',
         name: 'api-record',
         component: () => import('@/views/api-test/Record.vue')

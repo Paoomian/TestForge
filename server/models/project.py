@@ -17,4 +17,5 @@ class Project(Base):
     creator = relationship("User", back_populates="projects")
     ui_cases = relationship("UICase", back_populates="project", cascade="all, delete-orphan")
     api_cases = relationship("APICase", back_populates="project", cascade="all, delete-orphan")
+    api_test_cases = relationship("APITestCase", back_populates="project", cascade="all, delete-orphan")
     environments = relationship("Environment", back_populates="project", cascade="all, delete-orphan")

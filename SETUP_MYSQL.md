@@ -69,7 +69,7 @@ Database initialized successfully!
 
 ```bash
 # 在server目录下执行
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 后端将运行在: http://localhost:8000
@@ -180,6 +180,6 @@ DATABASE_URL=mysql+pymysql://testplatform:testplatform123@mysql:3306/testplatfor
 
 ## 需要帮助？
 
-- 查看数据库配置: [DATABASE.md](server/DATABASE.md)
+- 查看项目文档: [CLAUDE.md](CLAUDE.md)
 - 查看完整文档: [README.md](README.md)
 - API文档: http://localhost:8000/docs

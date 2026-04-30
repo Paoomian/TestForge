@@ -9,7 +9,13 @@
       "Bash(net stop *)",
       "Bash(mysql -u root -pzzh000801 -e \"SELECT 'Password reset successful!' as Status;\")",
       "Bash(mysql -u root -pzzh000801 -e \"SELECT 'Password works!' as Status, VERSION\\(\\) as MySQL_Version;\")",
-      "Bash(mysql -u root -e \"SELECT 'Connected!' as Status;\")"
+      "Bash(mysql -u root -e \"SELECT 'Connected!' as Status;\")",
+      "Bash(py -3.11 -m pip install email-validator)",
+      "Bash(py -3.11 -m pip install \"bcrypt<4.0.0\")",
+      "Bash(curl -X POST http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin123\"}')",
+      "Bash(curl -m 5 http://localhost:8000/health)",
+      "Bash(tasklist)",
+      "Bash(python -c \"from database import engine; from sqlalchemy import inspect; inspector = inspect\\(engine\\); print\\('Tables:', inspector.get_table_names\\(\\)\\)\")"
     ]
   }
 }

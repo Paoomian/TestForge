@@ -17,7 +17,7 @@
         <template #actions="{ record }">
           <a-space>
             <a-button type="text" size="small">编辑</a-button>
-            <a-button type="text" size="small" status="danger">删除</a-button>
+            <a-button type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
           </a-space>
         </template>
       </a-table>
@@ -44,10 +44,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { getProjects, createProject, deleteProject } from '@/api/project'
+import type { Project } from '@/api/project'
 
 const loading = ref(false)
 const showCreateModal = ref(false)
-const projects = ref([])
+const projects = ref<Project[]>([])
 
 const formData = reactive({
   name: '',
@@ -62,12 +64,49 @@ const columns = [
   { title: '操作', slotName: 'actions' }
 ]
 
-const handleCreate = () => {
-  Message.success('项目创建成功')
-  showCreateModal.value = false
+const loadProjects = async () => {
+  loading.value = true
+  try {
+    projects.value = await getProjects()
+  } catch (error) {
+    Message.error('加载项目列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleCreate = async () => {
+  if (!formData.name) {
+    Message.warning('请输入项目名称')
+    return
+  }
+
+  try {
+    await createProject({
+      name: formData.name,
+      description: formData.description
+    })
+    Message.success('项目创建成功')
+    showCreateModal.value = false
+    formData.name = ''
+    formData.description = ''
+    loadProjects()
+  } catch (error) {
+    Message.error('项目创建失败')
+  }
+}
+
+const handleDelete = async (record: Project) => {
+  try {
+    await deleteProject(record.id)
+    Message.success('项目删除成功')
+    loadProjects()
+  } catch (error) {
+    Message.error('项目删除失败')
+  }
 }
 
 onMounted(() => {
-  // 加载项目列表
+  loadProjects()
 })
 </script>

@@ -78,7 +78,7 @@
               <icon-code />
             </template>
             <template #title>接口自动化</template>
-            <a-menu-item key="api-cases">用例管理</a-menu-item>
+            <a-menu-item key="api-test-manage">用例管理</a-menu-item>
             <a-menu-item key="api-record">录制用例</a-menu-item>
             <a-menu-item key="api-run">执行测试</a-menu-item>
           </a-sub-menu>

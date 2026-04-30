@@ -120,15 +120,15 @@ FIRST_SUPERUSER_PASSWORD=admin123
 cd server
 
 # 使用Python 3.11 (推荐) 或 3.13
-py -3.11 -m pip install -r requirements_core.txt
-py -3.11 -m pip install email-validator
-py -3.11 -m pip install "bcrypt<4.0.0"
+python -m pip install -r requirements_core.txt
+python -m pip install email-validator
+python -m pip install "bcrypt<4.0.0"
 
 # 初始化数据库 (仅首次)
-py -3.11 init_db.py
+python init_db.py
 
 # 启动后端服务
-py -3.11 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **后端地址**:
