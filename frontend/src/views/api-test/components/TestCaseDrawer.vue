@@ -3,7 +3,6 @@
     v-model:visible="visible"
     :title="isEdit ? '编辑用例' : '新建用例'"
     width="800px"
-    :footer="false"
     unmount-on-close
     @cancel="handleCancel"
   >
@@ -32,9 +31,13 @@
           </a-form-item>
 
           <a-form-item label="所属模块">
-            <a-input
+            <a-tree-select
               v-model="formData.module"
-              placeholder="例如: 用户模块/登录"
+              :data="moduleTreeData"
+              placeholder="选择已有模块或输入新模块路径"
+              allow-clear
+              allow-search
+              :filter-tree-node="filterModuleTree"
             />
           </a-form-item>
 
@@ -172,18 +175,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { getProjects } from '@/api/project'
-import { createTestCase, updateTestCase } from '@/api/apiTestCase'
+import { createTestCase, updateTestCase, getModuleTree } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
-import type { APITestCase, APITestCaseCreate, APITestCaseUpdate } from '@/api/apiTestCase'
+import type { APITestCase, APITestCaseCreate, APITestCaseUpdate, ModuleTree } from '@/api/apiTestCase'
 import JsonEditor from '@/components/JsonEditor.vue'
 import AssertionEditor from './AssertionEditor.vue'
 
 interface Props {
   visible: boolean
   editData?: APITestCase | null
+  defaultProjectId?: number
 }
 
 const props = defineProps<Props>()
@@ -198,6 +202,66 @@ const isEdit = ref(false)
 const submitting = ref(false)
 const projects = ref<Project[]>([])
 const assertionLogic = ref<'and' | 'or'>('and')
+const moduleTreeRaw = ref<ModuleTree[]>([])
+
+interface ModuleTreeNode {
+  key: string
+  title: string
+  children?: ModuleTreeNode[]
+}
+
+const moduleTreeData = computed(() => {
+  const projectId = formData.project_id
+  if (!projectId) return []
+
+  const projectModules = moduleTreeRaw.value.find(m => m.project_id === projectId)
+  if (!projectModules || projectModules.modules.length === 0) return []
+
+  const nodes: ModuleTreeNode[] = []
+  const nodeMap = new Map<string, ModuleTreeNode>()
+
+  projectModules.modules.forEach(modulePath => {
+    const parts = modulePath.split('/')
+    let currentPath = ''
+
+    parts.forEach((part, index) => {
+      const parentPath = currentPath
+      currentPath = currentPath ? `${currentPath}/${part}` : part
+
+      if (!nodeMap.has(currentPath)) {
+        const node: ModuleTreeNode = {
+          key: currentPath,
+          title: part,
+          children: []
+        }
+        nodeMap.set(currentPath, node)
+
+        if (index === 0) {
+          nodes.push(node)
+        } else {
+          const parentNode = nodeMap.get(parentPath)
+          if (parentNode) {
+            parentNode.children!.push(node)
+          }
+        }
+      }
+    })
+  })
+
+  return nodes
+})
+
+const filterModuleTree = (searchValue: string, nodeData: any) => {
+  return nodeData.title.toLowerCase().includes(searchValue.toLowerCase())
+}
+
+const loadModuleTree = async () => {
+  try {
+    moduleTreeRaw.value = await getModuleTree()
+  } catch (error) {
+    console.error('Failed to load module tree:', error)
+  }
+}
 
 const formData = reactive<APITestCaseCreate & { id?: number }>({
   project_id: 0,
@@ -226,6 +290,7 @@ watch(() => props.visible, (newValue) => {
   visible.value = newValue
   if (newValue) {
     loadProjects()
+    loadModuleTree()
     if (props.editData) {
       isEdit.value = true
       loadEditData(props.editData)
@@ -267,6 +332,10 @@ watch(variablesJson, (newValue) => {
 const loadProjects = async () => {
   try {
     projects.value = await getProjects()
+    if (projects.value.length === 0 && !isEdit.value) {
+      Message.warning('暂无项目，请先创建项目')
+      visible.value = false
+    }
   } catch (error) {
     Message.error('加载项目列表失败')
   }
@@ -298,7 +367,7 @@ const loadEditData = (data: APITestCase) => {
 
 const resetForm = () => {
   formData.id = undefined
-  formData.project_id = 0
+  formData.project_id = props.defaultProjectId || 0
   formData.name = ''
   formData.description = ''
   formData.module = ''
@@ -330,7 +399,7 @@ const handleSubmit = async () => {
     return
   }
   if (!formData.project_id) {
-    Message.warning('请选择所属项目')
+    Message.warning(projects.value.length === 0 ? '暂无项目，请先去创建项目' : '请选择所属项目')
     return
   }
   if (!formData.url) {

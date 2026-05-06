@@ -32,6 +32,7 @@
     <TestCaseDrawer
       v-model:visible="drawerVisible"
       :edit-data="editingCase"
+      :default-project-id="selectedProjectId"
       @success="handleDrawerSuccess"
     />
 
@@ -121,10 +122,7 @@ const historyColumns = [
 
 const handleTreeSelect = (data: { projectId?: number; module?: string }) => {
   selectedProjectId.value = data.projectId
-  selectedModule.value = data.module
-  if (listRef.value) {
-    listRef.value.refresh()
-  }
+  selectedModule.value = data.module || undefined
 }
 
 const handleCreate = () => {

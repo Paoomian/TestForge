@@ -156,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   getTestCases,
@@ -173,6 +173,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+watch(() => [props.projectId, props.module], () => {
+  pagination.current = 1
+  loadData()
+}, { immediate: false })
 
 const emit = defineEmits<{
   (e: 'edit', record: APITestCase): void
@@ -273,14 +278,24 @@ const getStatusText = (status: string) => {
 const loadData = async () => {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, any> = {
       skip: (pagination.current - 1) * pagination.pageSize,
-      limit: pagination.pageSize,
-      project_id: props.projectId,
-      module: props.module,
-      keyword: searchForm.keyword || undefined,
-      priority: searchForm.priority || undefined,
-      status: searchForm.status || undefined
+      limit: pagination.pageSize
+    }
+    if (props.projectId) {
+      params.project_id = props.projectId
+    }
+    if (props.module) {
+      params.module = props.module
+    }
+    if (searchForm.keyword) {
+      params.keyword = searchForm.keyword
+    }
+    if (searchForm.priority) {
+      params.priority = searchForm.priority
+    }
+    if (searchForm.status) {
+      params.status = searchForm.status
     }
     const data = await getTestCases(params)
     tableData.value = data

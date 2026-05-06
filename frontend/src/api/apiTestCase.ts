@@ -350,3 +350,27 @@ export const getModuleTree = (project_id?: number) => {
     params: { project_id }
   })
 }
+
+export const createModule = (project_id: number, module: string) => {
+  if (USE_MOCK) {
+    return Promise.resolve({ message: 'Success' })
+  }
+
+  return request({
+    url: '/api-test-cases/modules',
+    method: 'post',
+    data: { project_id, module }
+  })
+}
+
+export const deleteModule = (project_id: number, module: string) => {
+  if (USE_MOCK) {
+    return Promise.resolve({ message: 'Success' })
+  }
+
+  return request({
+    url: '/api-test-cases/modules',
+    method: 'delete',
+    params: { project_id, module }
+  })
+}

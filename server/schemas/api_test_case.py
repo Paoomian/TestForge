@@ -79,3 +79,8 @@ class BatchTagRequest(BaseModel):
 
 class BatchDeleteRequest(BaseModel):
     case_ids: list[int]
+
+
+class CreateModuleRequest(BaseModel):
+    project_id: int
+    module: str

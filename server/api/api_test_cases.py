@@ -9,7 +9,8 @@ from schemas.api_test_case import (
     APITestCaseInDB,
     APITestCaseHistoryInDB,
     BatchTagRequest,
-    BatchDeleteRequest
+    BatchDeleteRequest,
+    CreateModuleRequest
 )
 from models import APITestCase, APITestCaseHistory, User
 from core.deps import get_current_user, check_permission
@@ -30,7 +31,9 @@ def list_test_cases(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("api_test:read"))
 ):
-    query = db.query(APITestCase)
+    query = db.query(APITestCase).filter(
+        ~APITestCase.name.like("__module_placeholder_%")
+    )
 
     if project_id:
         query = query.filter(APITestCase.project_id == project_id)
@@ -66,6 +69,125 @@ def create_test_case(
     db.commit()
     db.refresh(test_case)
     return test_case
+
+
+@router.get("/modules/tree")
+def get_module_tree(
+    project_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:read"))
+):
+    query = db.query(APITestCase.project_id, APITestCase.module).distinct()
+
+    if project_id:
+        query = query.filter(APITestCase.project_id == project_id)
+
+    results = query.all()
+
+    tree = {}
+    for proj_id, module in results:
+        if proj_id not in tree:
+            tree[proj_id] = set()
+        if module:
+            tree[proj_id].add(module)
+
+    tree_list = []
+    for proj_id, modules in tree.items():
+        tree_list.append({
+            "project_id": proj_id,
+            "modules": sorted(list(modules))
+        })
+
+    return tree_list
+
+
+@router.post("/modules")
+def create_module(
+    data: CreateModuleRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:write"))
+):
+    from models import Project
+    project = db.query(Project).filter(Project.id == data.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    existing = db.query(APITestCase).filter(
+        APITestCase.project_id == data.project_id,
+        APITestCase.module == data.module
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Module already exists")
+
+    placeholder = APITestCase(
+        project_id=data.project_id,
+        module=data.module,
+        name=f"__module_placeholder_{data.module}__",
+        method="GET",
+        url="",
+        headers={},
+        query_params={},
+        variables={},
+        assertions=[],
+        tags=[],
+        priority="medium",
+        status="draft",
+        creator_id=current_user.id
+    )
+    db.add(placeholder)
+    db.commit()
+
+    return {"message": "Module created successfully"}
+
+
+@router.delete("/modules")
+def delete_module(
+    project_id: int,
+    module: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:write"))
+):
+    print(
+        f"[DEBUG] delete_module called: project_id={project_id}, module='{module}'")
+
+    # 删除占位用例
+    placeholder = db.query(APITestCase).filter(
+        APITestCase.project_id == project_id,
+        APITestCase.name == f"__module_placeholder_{module}__"
+    ).first()
+
+    if placeholder:
+        print(
+            f"[DEBUG] Found placeholder: id={placeholder.id}, name={placeholder.name}")
+        db.delete(placeholder)
+    else:
+        print(f"[DEBUG] No placeholder found for module '{module}'")
+
+    # 删除该模块及其子模块下的所有真实用例
+    real_cases = db.query(APITestCase).filter(
+        APITestCase.project_id == project_id,
+        or_(
+            APITestCase.module == module,
+            APITestCase.module.like(f"{module}/%")
+        )
+    ).all()
+
+    deleted_count = 0
+    if real_cases:
+        print(
+            f"[DEBUG] Found {len(real_cases)} cases in module '{module}' (including submodules)")
+        for case in real_cases:
+            print(
+                f"[DEBUG] Deleting case: id={case.id}, name={case.name}, module={case.module}")
+            db.delete(case)
+            deleted_count += 1
+    else:
+        print(f"[DEBUG] No cases found in module '{module}'")
+
+    db.commit()
+    print(f"[DEBUG] Commit completed, deleted {deleted_count} cases")
+
+    return {"message": f"Module deleted, {deleted_count} test cases removed"}
 
 
 @router.get("/{case_id}", response_model=APITestCaseInDB)
@@ -148,7 +270,8 @@ def batch_tag(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("api_test:write"))
 ):
-    cases = db.query(APITestCase).filter(APITestCase.id.in_(request.case_ids)).all()
+    cases = db.query(APITestCase).filter(
+        APITestCase.id.in_(request.case_ids)).all()
 
     for case in cases:
         if request.operation == "add":
@@ -170,7 +293,8 @@ def batch_delete(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("api_test:write"))
 ):
-    deleted_count = db.query(APITestCase).filter(APITestCase.id.in_(request.case_ids)).delete(synchronize_session=False)
+    deleted_count = db.query(APITestCase).filter(APITestCase.id.in_(
+        request.case_ids)).delete(synchronize_session=False)
     db.commit()
     return {"message": f"Successfully deleted {deleted_count} test cases"}
 
@@ -282,35 +406,3 @@ def rollback_version(
     db.commit()
     db.refresh(test_case)
     return test_case
-
-
-@router.get("/modules/tree")
-def get_module_tree(
-    project_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:read"))
-):
-    query = db.query(APITestCase.project_id, APITestCase.module).distinct()
-
-    if project_id:
-        query = query.filter(APITestCase.project_id == project_id)
-
-    results = query.all()
-
-    # 构建树形结构
-    tree = {}
-    for proj_id, module in results:
-        if proj_id not in tree:
-            tree[proj_id] = set()
-        if module:
-            tree[proj_id].add(module)
-
-    # 转换为列表
-    tree_list = []
-    for proj_id, modules in tree.items():
-        tree_list.append({
-            "project_id": proj_id,
-            "modules": sorted(list(modules))
-        })
-
-    return tree_list
