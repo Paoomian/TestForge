@@ -34,6 +34,16 @@
             </a-button>
           </a-popconfirm>
         </a-tooltip>
+        <a-tooltip content="重命名选中的模块（请先选中模块节点）">
+          <a-button
+            size="mini"
+            :disabled="!selectedNodeForDelete"
+            @click="handleRenameModuleClick"
+          >
+            <template #icon><icon-edit /></template>
+            重命名
+          </a-button>
+        </a-tooltip>
       </div>
     </div>
     <a-tree
@@ -51,7 +61,7 @@
       @ok="handleConfirmAddModule"
       @cancel="addModuleVisible = false"
     >
-      <a-form layout="vertical">
+      <a-form :model="{ name: newModuleName }" layout="vertical">
         <a-form-item label="模块名称" required>
           <a-input
             v-model="newModuleName"
@@ -63,6 +73,26 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 重命名模块弹窗 -->
+    <a-modal
+      v-model:visible="renameModuleVisible"
+      title="重命名模块"
+      @ok="handleConfirmRenameModule"
+      @cancel="renameModuleVisible = false"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="当前名称">
+          <a-input :model-value="renameModuleOldName" disabled />
+        </a-form-item>
+        <a-form-item label="新名称" required>
+          <a-input
+            v-model="renameModuleNewName"
+            placeholder="请输入新的模块名称"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -70,7 +100,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { getProjects } from '@/api/project'
-import { getModuleTree, createModule, deleteModule } from '@/api/apiTestCase'
+import { getModuleTree, createModule, deleteModule, renameModule } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
 import type { ModuleTree } from '@/api/apiTestCase'
 
@@ -96,6 +126,11 @@ const addModuleVisible = ref(false)
 const addModuleProjectId = ref<number>()
 const addModuleParent = ref('')
 const newModuleName = ref('')
+
+const renameModuleVisible = ref(false)
+const renameModuleProjectId = ref<number>()
+const renameModuleOldName = ref('')
+const renameModuleNewName = ref('')
 
 const selectedNode = ref<TreeNode | null>(null)
 
@@ -253,6 +288,45 @@ const handleConfirmAddModule = async () => {
     await loadData()
   } catch (error) {
     Message.error('模块创建失败')
+  }
+}
+
+const handleRenameModuleClick = () => {
+  if (!selectedNode.value?.projectId || !selectedNode.value?.module) return
+  renameModuleProjectId.value = selectedNode.value.projectId
+  renameModuleOldName.value = selectedNode.value.module
+  // 默认填充当前模块名的最后一段作为新名称
+  const parts = selectedNode.value.module.split('/')
+  renameModuleNewName.value = parts[parts.length - 1]
+  renameModuleVisible.value = true
+}
+
+const handleConfirmRenameModule = async () => {
+  if (!renameModuleNewName.value.trim()) {
+    Message.warning('请输入新的模块名称')
+    return
+  }
+  if (!renameModuleProjectId.value) return
+
+  // 构建新的完整模块路径：替换最后一段
+  const oldParts = renameModuleOldName.value.split('/')
+  oldParts[oldParts.length - 1] = renameModuleNewName.value.trim()
+  const newModulePath = oldParts.join('/')
+
+  if (newModulePath === renameModuleOldName.value) {
+    renameModuleVisible.value = false
+    return
+  }
+
+  try {
+    await renameModule(renameModuleProjectId.value, renameModuleOldName.value, newModulePath)
+    Message.success('模块重命名成功')
+    renameModuleVisible.value = false
+    selectedNode.value = null
+    emit('select', {})
+    await loadData()
+  } catch (error) {
+    Message.error('模块重命名失败')
   }
 }
 

@@ -1,16 +1,8 @@
 <template>
   <div class="assertion-editor">
-    <a-space direction="vertical" fill>
-      <!-- 断言逻辑关系 -->
-      <a-form-item label="断言逻辑">
-        <a-radio-group v-model="logic">
-          <a-radio value="and">全部满足（AND）</a-radio>
-          <a-radio value="or">任一满足（OR）</a-radio>
-        </a-radio-group>
-      </a-form-item>
-
+    <div class="assertion-list">
       <!-- 断言列表 -->
-      <div v-for="(assertion, index) in assertions" :key="assertion.id" class="assertion-item">
+      <div v-for="(assertion, index) in assertions" :key="index" class="assertion-item">
         <a-card :bordered="true" size="small">
           <template #extra>
             <a-button
@@ -23,21 +15,20 @@
             </a-button>
           </template>
 
-          <a-form layout="vertical">
+          <a-form :model="assertion" layout="vertical">
             <a-row :gutter="16">
               <a-col :span="8">
                 <a-form-item label="断言类型">
                   <a-select
-                    v-model="assertion.type"
+                    v-model="assertion.assertion_type"
                     placeholder="选择断言类型"
                     @change="handleTypeChange(assertion)"
                   >
                     <a-option value="status_code">状态码</a-option>
                     <a-option value="jsonpath">JSONPath</a-option>
-                    <a-option value="xpath">XPath</a-option>
                     <a-option value="header">响应头</a-option>
-                    <a-option value="response_time">响应时间</a-option>
-                    <a-option value="schema">Schema校验</a-option>
+                    <a-option value="response_time">响应时间(ms)</a-option>
+                    <a-option value="body_contains">Body包含</a-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -58,12 +49,12 @@
 
               <a-col :span="8">
                 <a-form-item
-                  v-if="needsField(assertion.type)"
-                  :label="getFieldLabel(assertion.type)"
+                  v-if="needsField(assertion.assertion_type)"
+                  :label="getFieldLabel(assertion.assertion_type)"
                 >
                   <a-input
                     v-model="assertion.field"
-                    :placeholder="getFieldPlaceholder(assertion.type)"
+                    :placeholder="getFieldPlaceholder(assertion.assertion_type)"
                   />
                 </a-form-item>
               </a-col>
@@ -73,15 +64,8 @@
               <a-col :span="16">
                 <a-form-item label="期望值">
                   <a-input
-                    v-if="assertion.type !== 'schema'"
                     v-model="assertion.expected"
                     placeholder="输入期望值"
-                  />
-                  <a-textarea
-                    v-else
-                    v-model="assertion.expected"
-                    placeholder="输入JSON Schema"
-                    :auto-size="{ minRows: 3, maxRows: 6 }"
                   />
                 </a-form-item>
               </a-col>
@@ -98,114 +82,98 @@
           </a-form>
         </a-card>
       </div>
+    </div>
 
-      <!-- 添加断言按钮 -->
-      <a-button type="dashed" long @click="addAssertion">
-        <template #icon><icon-plus /></template>
-        添加断言
-      </a-button>
-    </a-space>
+    <!-- 添加断言按钮 -->
+    <a-button type="dashed" long @click="addAssertion" style="margin-top: 8px;">
+      <template #icon><icon-plus /></template>
+      添加断言
+    </a-button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import type { Assertion } from '@/api/apiTestCase'
+import type { AssertionItem } from '@/api/apiTestCase'
 
-interface Props {
-  modelValue: Assertion[]
-  assertionLogic?: 'and' | 'or'
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  assertionLogic: 'and'
-})
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', value: Assertion[]): void
-  (e: 'update:assertionLogic', value: 'and' | 'or'): void
+const props = defineProps<{
+  modelValue: AssertionItem[]
 }>()
 
-const assertions = ref<Assertion[]>([...props.modelValue])
-const logic = ref<'and' | 'or'>(props.assertionLogic)
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: AssertionItem[]): void
+}>()
 
+const assertions = ref<AssertionItem[]>([])
+
+// 监听props变化，同步到本地（仅在父组件主动设置时）
 watch(() => props.modelValue, (newValue) => {
-  assertions.value = [...newValue]
-}, { deep: true })
+  if (JSON.stringify(newValue) !== JSON.stringify(assertions.value)) {
+    assertions.value = (newValue || []).map(a => ({ ...a }))
+  }
+}, { immediate: true })
 
-watch(() => props.assertionLogic, (newValue) => {
-  logic.value = newValue
-})
-
-watch(assertions, (newValue) => {
-  emit('update:modelValue', newValue)
-}, { deep: true })
-
-watch(logic, (newValue) => {
-  emit('update:assertionLogic', newValue)
-})
-
-const generateId = () => {
-  return `assertion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+function emitChange() {
+  emit('update:modelValue', assertions.value.map((a, i) => ({ ...a, sort_order: i })))
 }
 
 const addAssertion = () => {
   assertions.value.push({
-    id: generateId(),
-    type: 'status_code',
+    assertion_type: 'status_code',
     operator: 'equals',
-    expected: 200
+    field: '',
+    expected: '200',
+    description: '',
   })
+  emitChange()
 }
 
 const removeAssertion = (index: number) => {
   assertions.value.splice(index, 1)
+  emitChange()
 }
 
-const handleTypeChange = (assertion: Assertion) => {
-  // 根据类型设置默认值
-  if (assertion.type === 'status_code') {
-    assertion.expected = 200
+const handleTypeChange = (assertion: AssertionItem) => {
+  if (assertion.assertion_type === 'status_code') {
+    assertion.expected = '200'
     assertion.operator = 'equals'
-    delete assertion.field
-  } else if (assertion.type === 'response_time') {
-    assertion.expected = 1000
+    assertion.field = ''
+  } else if (assertion.assertion_type === 'response_time') {
+    assertion.expected = '1000'
     assertion.operator = 'less_than'
-    delete assertion.field
-  } else if (assertion.type === 'jsonpath') {
+    assertion.field = ''
+  } else if (assertion.assertion_type === 'jsonpath') {
     assertion.field = '$.data'
     assertion.operator = 'exists'
-  } else if (assertion.type === 'xpath') {
-    assertion.field = '//root/data'
-    assertion.operator = 'exists'
-  } else if (assertion.type === 'header') {
+    assertion.expected = ''
+  } else if (assertion.assertion_type === 'header') {
     assertion.field = 'Content-Type'
     assertion.operator = 'contains'
-  } else if (assertion.type === 'schema') {
-    assertion.expected = '{}'
-    assertion.operator = 'equals'
-    delete assertion.field
+    assertion.expected = 'application/json'
+  } else if (assertion.assertion_type === 'body_contains') {
+    assertion.field = ''
+    assertion.operator = 'contains'
+    assertion.expected = ''
   }
+  emitChange()
 }
 
 const needsField = (type: string) => {
-  return ['jsonpath', 'xpath', 'header'].includes(type)
+  return ['jsonpath', 'header'].includes(type)
 }
 
 const getFieldLabel = (type: string) => {
   const labels: Record<string, string> = {
     jsonpath: 'JSONPath表达式',
-    xpath: 'XPath表达式',
-    header: '响应头名称'
+    header: '响应头名称',
   }
   return labels[type] || '字段'
 }
 
 const getFieldPlaceholder = (type: string) => {
   const placeholders: Record<string, string> = {
-    jsonpath: '例如: $.data.id',
-    xpath: '例如: //root/data',
-    header: '例如: Content-Type'
+    jsonpath: '$.data.id',
+    header: 'Content-Type',
   }
   return placeholders[type] || ''
 }
@@ -216,7 +184,13 @@ const getFieldPlaceholder = (type: string) => {
   width: 100%;
 }
 
+.assertion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .assertion-item {
-  margin-bottom: 12px;
+  width: 100%;
 }
 </style>

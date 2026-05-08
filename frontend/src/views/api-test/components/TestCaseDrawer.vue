@@ -2,187 +2,151 @@
   <a-drawer
     v-model:visible="visible"
     :title="isEdit ? '编辑用例' : '新建用例'"
-    width="800px"
+    width="900px"
     unmount-on-close
     @cancel="handleCancel"
   >
-    <a-form :model="formData" layout="vertical">
-      <a-tabs default-active-key="basic">
-        <!-- 基本信息 -->
-        <a-tab-pane key="basic" title="基本信息">
-          <a-form-item label="用例名称" required>
-            <a-input v-model="formData.name" placeholder="请输入用例名称" />
-          </a-form-item>
+    <!-- 工具栏 -->
+    <template #title-extra>
+      <a-space v-if="!isEdit">
+        <a-button size="small" @click="showTemplateModal = true">
+          <template #icon><icon-file /></template>
+          从模板创建
+        </a-button>
+        <a-button size="small" @click="showCurlModal = true">
+          <template #icon><icon-import /></template>
+          导入cURL
+        </a-button>
+      </a-space>
+    </template>
 
-          <a-form-item label="所属项目" required>
-            <a-select
-              v-model="formData.project_id"
-              placeholder="选择项目"
-              :disabled="isEdit"
-            >
-              <a-option
-                v-for="project in projects"
-                :key="project.id"
-                :value="project.id"
-              >
-                {{ project.name }}
-              </a-option>
-            </a-select>
-          </a-form-item>
+    <a-tabs v-model:active-key="activeTab">
+      <!-- Tab1: 基本信息 -->
+      <a-tab-pane key="basic" title="基本信息">
+        <BasicInfoTab
+          :form-data="formData"
+          :projects="projects"
+          :module-tree-raw="moduleTreeRaw"
+          :is-edit="isEdit"
+          @update="handleFieldUpdate"
+        />
+      </a-tab-pane>
 
-          <a-form-item label="所属模块">
-            <a-tree-select
-              v-model="formData.module"
-              :data="moduleTreeData"
-              placeholder="选择已有模块或输入新模块路径"
-              allow-clear
-              allow-search
-              :filter-tree-node="filterModuleTree"
-            />
-          </a-form-item>
+      <!-- Tab2: 请求配置 -->
+      <a-tab-pane key="request" title="请求配置">
+        <RequestConfigTab
+          :form-data="formData"
+          :raw-content="rawContent"
+          :project-id="formData.project_id"
+          @update="handleFieldUpdate"
+          @update:raw-content="rawContent = $event"
+        />
+      </a-tab-pane>
 
-          <a-form-item label="用例描述">
-            <a-textarea
-              v-model="formData.description"
-              placeholder="请输入用例描述"
-              :auto-size="{ minRows: 3, maxRows: 6 }"
-            />
-          </a-form-item>
+      <!-- Tab3: 断言与提取 -->
+      <a-tab-pane key="assertion-extract" title="断言与提取">
+        <AssertionExtractTab
+          :assertions="formData.assertions"
+          :extracts="formData.extracts"
+          @update:assertions="formData.assertions = $event"
+          @update:extracts="formData.extracts = $event"
+        />
+      </a-tab-pane>
 
-          <a-row :gutter="16">
-            <a-col :span="8">
-              <a-form-item label="优先级">
-                <a-select v-model="formData.priority">
-                  <a-option value="low">低</a-option>
-                  <a-option value="medium">中</a-option>
-                  <a-option value="high">高</a-option>
-                  <a-option value="critical">紧急</a-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-
-            <a-col :span="8">
-              <a-form-item label="状态">
-                <a-select v-model="formData.status">
-                  <a-option value="active">启用</a-option>
-                  <a-option value="deprecated">废弃</a-option>
-                  <a-option value="draft">草稿</a-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-
-            <a-col :span="8">
-              <a-form-item label="标签">
-                <a-select
-                  v-model="formData.tags"
-                  placeholder="添加标签"
-                  multiple
-                  allow-create
-                  allow-clear
-                />
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </a-tab-pane>
-
-        <!-- 请求配置 -->
-        <a-tab-pane key="request" title="请求配置">
-          <a-form-item label="请求方法" required>
-            <a-select v-model="formData.method">
-              <a-option value="GET">GET</a-option>
-              <a-option value="POST">POST</a-option>
-              <a-option value="PUT">PUT</a-option>
-              <a-option value="DELETE">DELETE</a-option>
-              <a-option value="PATCH">PATCH</a-option>
-            </a-select>
-          </a-form-item>
-
-          <a-form-item label="请求URL" required>
-            <a-input
-              v-model="formData.url"
-              placeholder="例如: /api/v1/users"
-            />
-          </a-form-item>
-
-          <a-form-item label="请求头 (Headers)">
-            <JsonEditor
-              v-model="headersJson"
-              height="200px"
-            />
-          </a-form-item>
-
-          <a-form-item label="查询参数 (Query Params)">
-            <JsonEditor
-              v-model="queryParamsJson"
-              height="150px"
-            />
-          </a-form-item>
-
-          <a-form-item label="请求体 (Body)">
-            <a-textarea
-              v-model="formData.body"
-              placeholder="请输入请求体内容"
-              :auto-size="{ minRows: 6, maxRows: 12 }"
-            />
-          </a-form-item>
-        </a-tab-pane>
-
-        <!-- 断言配置 -->
-        <a-tab-pane key="assertions" title="断言配置">
-          <AssertionEditor
-            v-model="formData.assertions"
-            v-model:assertion-logic="assertionLogic"
-          />
-        </a-tab-pane>
-
-        <!-- 高级配置 -->
-        <a-tab-pane key="advanced" title="高级配置">
-          <a-form-item label="变量 (Variables)">
-            <JsonEditor
-              v-model="variablesJson"
-              height="150px"
-            />
-          </a-form-item>
-
-          <a-form-item label="前置脚本 (Setup Script)">
-            <a-textarea
-              v-model="formData.setup_script"
-              placeholder="在请求发送前执行的脚本"
-              :auto-size="{ minRows: 4, maxRows: 8 }"
-            />
-          </a-form-item>
-
-          <a-form-item label="后置脚本 (Teardown Script)">
-            <a-textarea
-              v-model="formData.teardown_script"
-              placeholder="在请求完成后执行的脚本"
-              :auto-size="{ minRows: 4, maxRows: 8 }"
-            />
-          </a-form-item>
-        </a-tab-pane>
-      </a-tabs>
-    </a-form>
+      <!-- Tab4: 脚本 -->
+      <a-tab-pane key="script" title="脚本">
+        <ScriptTab
+          :setup-script="formData.setup_script || ''"
+          :teardown-script="formData.teardown_script || ''"
+          @update:setup-script="formData.setup_script = $event"
+          @update:teardown-script="formData.teardown_script = $event"
+        />
+      </a-tab-pane>
+    </a-tabs>
 
     <template #footer>
       <a-space>
         <a-button @click="handleCancel">取消</a-button>
-        <a-button type="primary" :loading="submitting" @click="handleSubmit">
+        <a-button type="secondary" :loading="submitting" @click="handleSubmit('draft')">
+          暂存草稿
+        </a-button>
+        <a-button type="primary" :loading="submitting" @click="handleSubmit('active')">
           保存
         </a-button>
       </a-space>
     </template>
+
+    <!-- 模板选择弹窗 -->
+    <a-modal
+      v-model:visible="showTemplateModal"
+      title="选择模板"
+      width="600px"
+      :footer="false"
+    >
+      <a-list :data="templates" :loading="templatesLoading">
+        <template #item="{ item }">
+          <a-list-item>
+            <a-list-item-meta :title="item.name" :description="item.description" />
+            <template #actions>
+              <a-button type="primary" size="small" @click="applyTemplate(item)">
+                使用
+              </a-button>
+            </template>
+          </a-list-item>
+        </template>
+      </a-list>
+    </a-modal>
+
+    <!-- cURL导入弹窗 -->
+    <a-modal
+      v-model:visible="showCurlModal"
+      title="导入 cURL 命令"
+      @ok="handleCurlImport"
+      :ok-loading="curlLoading"
+    >
+      <a-form :model="{ curlCommand }" layout="vertical">
+        <a-form-item label="粘贴 cURL 命令">
+          <a-textarea
+            v-model="curlCommand"
+            placeholder='curl -X POST "https://api.example.com/users" -H "Content-Type: application/json" -d {"name":"test"}'
+            :auto-size="{ minRows: 6, maxRows: 12 }"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </a-drawer>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { getProjects } from '@/api/project'
-import { createTestCase, updateTestCase, getModuleTree } from '@/api/apiTestCase'
+import {
+  createTestCase,
+  updateTestCase,
+  getTestCase,
+  getModuleTree,
+  getTemplates,
+  importCurl,
+} from '@/api/apiTestCase'
+import type {
+  APITestCase,
+  APITestCaseCreate,
+  APITestCaseUpdate,
+  ModuleTree,
+  TestCaseTemplate,
+  HeaderItem,
+  QueryParamItem,
+  BodyFormItem,
+  AssertionItem,
+  ExtractItem,
+  AuthConfig,
+} from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
-import type { APITestCase, APITestCaseCreate, APITestCaseUpdate, ModuleTree } from '@/api/apiTestCase'
-import JsonEditor from '@/components/JsonEditor.vue'
-import AssertionEditor from './AssertionEditor.vue'
+import BasicInfoTab from './BasicInfoTab.vue'
+import RequestConfigTab from './RequestConfigTab.vue'
+import AssertionExtractTab from './AssertionExtractTab.vue'
+import ScriptTab from './ScriptTab.vue'
 
 interface Props {
   visible: boolean
@@ -200,95 +164,52 @@ const emit = defineEmits<{
 const visible = ref(props.visible)
 const isEdit = ref(false)
 const submitting = ref(false)
+const activeTab = ref('basic')
 const projects = ref<Project[]>([])
-const assertionLogic = ref<'and' | 'or'>('and')
 const moduleTreeRaw = ref<ModuleTree[]>([])
 
-interface ModuleTreeNode {
-  key: string
-  title: string
-  children?: ModuleTreeNode[]
-}
+// 模板相关
+const showTemplateModal = ref(false)
+const templates = ref<TestCaseTemplate[]>([])
+const templatesLoading = ref(false)
 
-const moduleTreeData = computed(() => {
-  const projectId = formData.project_id
-  if (!projectId) return []
+// cURL相关
+const showCurlModal = ref(false)
+const curlCommand = ref('')
+const curlLoading = ref(false)
 
-  const projectModules = moduleTreeRaw.value.find(m => m.project_id === projectId)
-  if (!projectModules || projectModules.modules.length === 0) return []
+const rawContent = ref('')
 
-  const nodes: ModuleTreeNode[] = []
-  const nodeMap = new Map<string, ModuleTreeNode>()
-
-  projectModules.modules.forEach(modulePath => {
-    const parts = modulePath.split('/')
-    let currentPath = ''
-
-    parts.forEach((part, index) => {
-      const parentPath = currentPath
-      currentPath = currentPath ? `${currentPath}/${part}` : part
-
-      if (!nodeMap.has(currentPath)) {
-        const node: ModuleTreeNode = {
-          key: currentPath,
-          title: part,
-          children: []
-        }
-        nodeMap.set(currentPath, node)
-
-        if (index === 0) {
-          nodes.push(node)
-        } else {
-          const parentNode = nodeMap.get(parentPath)
-          if (parentNode) {
-            parentNode.children!.push(node)
-          }
-        }
-      }
-    })
-  })
-
-  return nodes
-})
-
-const filterModuleTree = (searchValue: string, nodeData: any) => {
-  return nodeData.title.toLowerCase().includes(searchValue.toLowerCase())
-}
-
-const loadModuleTree = async () => {
-  try {
-    moduleTreeRaw.value = await getModuleTree()
-  } catch (error) {
-    console.error('Failed to load module tree:', error)
-  }
-}
-
-const formData = reactive<APITestCaseCreate & { id?: number }>({
+const formData = reactive({
+  id: undefined as number | undefined,
   project_id: 0,
+  case_number: '',
+  module: '',
   name: '',
   description: '',
-  module: '',
+  preconditions: '',
+  remark: '',
   method: 'GET',
   url: '',
-  headers: {},
-  body: '',
-  query_params: {},
-  variables: {},
+  body_type: 'none',
+  auth_type: 'none',
   setup_script: '',
   teardown_script: '',
-  assertions: [],
-  tags: [],
-  priority: 'medium',
-  status: 'active'
+  tags: [] as string[],
+  priority: 'P2',
+  status: 'draft',
+  headers: [] as HeaderItem[],
+  query_params: [] as QueryParamItem[],
+  body_form: [] as BodyFormItem[],
+  assertions: [] as AssertionItem[],
+  extracts: [] as ExtractItem[],
+  auth: { auth_type: 'none' } as AuthConfig,
 })
 
-const headersJson = ref('{}')
-const queryParamsJson = ref('{}')
-const variablesJson = ref('{}')
-
-watch(() => props.visible, (newValue) => {
-  visible.value = newValue
-  if (newValue) {
+// 监听visible
+watch(() => props.visible, (val) => {
+  visible.value = val
+  if (val) {
     loadProjects()
     loadModuleTree()
     if (props.editData) {
@@ -301,34 +222,11 @@ watch(() => props.visible, (newValue) => {
   }
 })
 
-watch(visible, (newValue) => {
-  emit('update:visible', newValue)
+watch(visible, (val) => {
+  emit('update:visible', val)
 })
 
-watch(headersJson, (newValue) => {
-  try {
-    formData.headers = JSON.parse(newValue)
-  } catch (e) {
-    // 忽略JSON解析错误
-  }
-})
-
-watch(queryParamsJson, (newValue) => {
-  try {
-    formData.query_params = JSON.parse(newValue)
-  } catch (e) {
-    // 忽略JSON解析错误
-  }
-})
-
-watch(variablesJson, (newValue) => {
-  try {
-    formData.variables = JSON.parse(newValue)
-  } catch (e) {
-    // 忽略JSON解析错误
-  }
-})
-
+// 项目列表
 const loadProjects = async () => {
   try {
     projects.value = await getProjects()
@@ -336,115 +234,253 @@ const loadProjects = async () => {
       Message.warning('暂无项目，请先创建项目')
       visible.value = false
     }
-  } catch (error) {
+  } catch {
     Message.error('加载项目列表失败')
   }
 }
 
-const loadEditData = (data: APITestCase) => {
-  formData.id = data.id
-  formData.project_id = data.project_id
-  formData.name = data.name
-  formData.description = data.description
-  formData.module = data.module
-  formData.method = data.method
-  formData.url = data.url
-  formData.headers = data.headers
-  formData.body = data.body
-  formData.query_params = data.query_params
-  formData.variables = data.variables
-  formData.setup_script = data.setup_script
-  formData.teardown_script = data.teardown_script
-  formData.assertions = data.assertions
-  formData.tags = data.tags
-  formData.priority = data.priority
-  formData.status = data.status
+// 模块树
+const loadModuleTree = async () => {
+  try {
+    moduleTreeRaw.value = await getModuleTree()
+  } catch {
+    console.error('Failed to load module tree')
+  }
+}
 
-  headersJson.value = JSON.stringify(data.headers, null, 2)
-  queryParamsJson.value = JSON.stringify(data.query_params, null, 2)
-  variablesJson.value = JSON.stringify(data.variables, null, 2)
+// 加载编辑数据
+const loadEditData = async (data: APITestCase) => {
+  // 如果editData是完整数据（有子表），直接使用；否则重新获取
+  let fullData = data
+  if (!data.headers && !data.assertions) {
+    try {
+      fullData = await getTestCase(data.id)
+    } catch {
+      Message.error('加载用例详情失败')
+      return
+    }
+  }
+
+  formData.id = fullData.id
+  formData.project_id = fullData.project_id
+  formData.case_number = fullData.case_number || ''
+  formData.module = fullData.module || ''
+  formData.name = fullData.name
+  formData.description = fullData.description || ''
+  formData.preconditions = fullData.preconditions || ''
+  formData.remark = fullData.remark || ''
+  formData.method = fullData.method
+  formData.url = fullData.url
+  formData.body_type = fullData.body_type || 'none'
+  formData.auth_type = fullData.auth_type || 'none'
+  formData.setup_script = fullData.setup_script || ''
+  formData.teardown_script = fullData.teardown_script || ''
+  formData.tags = fullData.tags || []
+  formData.priority = fullData.priority || 'P2'
+  formData.status = fullData.status || 'draft'
+  formData.headers = (fullData.headers || []).map(h => ({ ...h }))
+  formData.query_params = (fullData.query_params || []).map(p => ({ ...p }))
+  formData.body_form = (fullData.body_form || []).map(f => ({ ...f }))
+  formData.assertions = (fullData.assertions || []).map(a => ({ ...a }))
+  formData.extracts = (fullData.extracts || []).map(e => ({ ...e }))
+  formData.auth = fullData.auth ? { ...fullData.auth } : { auth_type: 'none' }
+
+  rawContent.value = fullData.body_raw?.content || ''
 }
 
 const resetForm = () => {
   formData.id = undefined
   formData.project_id = props.defaultProjectId || 0
+  formData.case_number = ''
+  formData.module = ''
   formData.name = ''
   formData.description = ''
-  formData.module = ''
+  formData.preconditions = ''
+  formData.remark = ''
   formData.method = 'GET'
   formData.url = ''
-  formData.headers = {}
-  formData.body = ''
-  formData.query_params = {}
-  formData.variables = {}
+  formData.body_type = 'none'
+  formData.auth_type = 'none'
   formData.setup_script = ''
   formData.teardown_script = ''
-  formData.assertions = []
   formData.tags = []
-  formData.priority = 'medium'
-  formData.status = 'active'
+  formData.priority = 'P2'
+  formData.status = 'draft'
+  formData.headers = []
+  formData.query_params = []
+  formData.body_form = []
+  formData.assertions = []
+  formData.extracts = []
+  formData.auth = { auth_type: 'none' }
+  rawContent.value = ''
+  activeTab.value = 'basic'
+}
 
-  headersJson.value = '{}'
-  queryParamsJson.value = '{}'
-  variablesJson.value = '{}'
+const handleFieldUpdate = (field: string, value: any) => {
+  ;(formData as any)[field] = value
 }
 
 const handleCancel = () => {
   visible.value = false
 }
 
-const handleSubmit = async () => {
-  if (!formData.name) {
+// 表单校验
+const validate = (): boolean => {
+  if (!formData.name.trim()) {
     Message.warning('请输入用例名称')
-    return
+    activeTab.value = 'basic'
+    return false
   }
   if (!formData.project_id) {
-    Message.warning(projects.value.length === 0 ? '暂无项目，请先去创建项目' : '请选择所属项目')
-    return
+    Message.warning('请选择所属项目')
+    activeTab.value = 'basic'
+    return false
   }
-  if (!formData.url) {
+  if (!formData.url.trim()) {
     Message.warning('请输入请求URL')
-    return
+    activeTab.value = 'request'
+    return false
   }
+  return true
+}
+
+const handleSubmit = async (saveStatus?: string) => {
+  if (!validate()) return
 
   submitting.value = true
   try {
+    const bodyRaw = rawContent.value ? { content: rawContent.value } : undefined
+
     if (isEdit.value && formData.id) {
       const updateData: APITestCaseUpdate = {
         name: formData.name,
         description: formData.description,
         module: formData.module,
+        preconditions: formData.preconditions,
+        remark: formData.remark,
         method: formData.method,
         url: formData.url,
-        headers: formData.headers,
-        body: formData.body,
-        query_params: formData.query_params,
-        variables: formData.variables,
+        body_type: formData.body_type,
+        auth_type: formData.auth_type,
         setup_script: formData.setup_script,
         teardown_script: formData.teardown_script,
-        assertions: formData.assertions,
         tags: formData.tags,
         priority: formData.priority,
-        status: formData.status
+        status: saveStatus || formData.status,
+        headers: formData.headers,
+        query_params: formData.query_params,
+        body_form: formData.body_form,
+        body_raw: bodyRaw,
+        assertions: formData.assertions,
+        extracts: formData.extracts,
+        auth: formData.auth,
       }
       await updateTestCase(formData.id, updateData)
       Message.success('更新成功')
     } else {
-      await createTestCase(formData)
+      const createData: APITestCaseCreate = {
+        project_id: formData.project_id,
+        name: formData.name,
+        description: formData.description,
+        module: formData.module,
+        preconditions: formData.preconditions,
+        remark: formData.remark,
+        method: formData.method,
+        url: formData.url,
+        body_type: formData.body_type,
+        auth_type: formData.auth_type,
+        setup_script: formData.setup_script,
+        teardown_script: formData.teardown_script,
+        tags: formData.tags,
+        priority: formData.priority,
+        status: saveStatus || formData.status,
+        headers: formData.headers,
+        query_params: formData.query_params,
+        body_form: formData.body_form,
+        body_raw: bodyRaw,
+        assertions: formData.assertions,
+        extracts: formData.extracts,
+        auth: formData.auth,
+      }
+      await createTestCase(createData)
       Message.success('创建成功')
     }
     visible.value = false
     emit('success')
-  } catch (error) {
+  } catch {
     Message.error(isEdit.value ? '更新失败' : '创建失败')
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(() => {
-  loadProjects()
+// 模板
+const loadTemplates = async () => {
+  templatesLoading.value = true
+  try {
+    templates.value = await getTemplates()
+  } catch {
+    Message.error('加载模板失败')
+  } finally {
+    templatesLoading.value = false
+  }
+}
+
+watch(showTemplateModal, (val) => {
+  if (val && templates.value.length === 0) loadTemplates()
 })
+
+const applyTemplate = (tpl: TestCaseTemplate) => {
+  formData.method = tpl.method
+  formData.url = tpl.url
+  formData.body_type = tpl.body_type || 'none'
+  formData.headers = (tpl.headers || []).map(h => ({ ...h }))
+  formData.query_params = (tpl.query_params || []).map(p => ({ ...p }))
+  formData.assertions = (tpl.assertions || []).map(a => ({ ...a }))
+  formData.extracts = (tpl.extracts || []).map(e => ({ ...e }))
+  if (tpl.body_raw_content) {
+    rawContent.value = tpl.body_raw_content
+  }
+  if (tpl.priority) {
+    formData.priority = tpl.priority
+  }
+  showTemplateModal.value = false
+  activeTab.value = 'request'
+  Message.success('模板已应用')
+}
+
+// cURL导入
+const handleCurlImport = async () => {
+  if (!curlCommand.value.trim()) {
+    Message.warning('请输入cURL命令')
+    return
+  }
+  curlLoading.value = true
+  try {
+    const result = await importCurl(curlCommand.value)
+    formData.method = result.method
+    formData.url = result.url
+    formData.body_type = result.body_type
+    formData.headers = result.headers || []
+    formData.query_params = result.query_params || []
+    formData.body_form = result.body_form || []
+    if (result.body_raw_content) {
+      rawContent.value = result.body_raw_content
+    }
+    if (result.auth_type && result.auth_type !== 'none') {
+      formData.auth_type = result.auth_type
+      formData.auth = result.auth || { auth_type: result.auth_type as 'none' | 'bearer' | 'basic' | 'api_key' }
+    }
+    showCurlModal.value = false
+    curlCommand.value = ''
+    activeTab.value = 'request'
+    Message.success('cURL已导入')
+  } catch {
+    Message.error('cURL解析失败，请检查命令格式')
+  } finally {
+    curlLoading.value = false
+  }
+}
 </script>
 
 <style scoped>

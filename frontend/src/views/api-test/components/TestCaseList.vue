@@ -20,10 +20,10 @@
           style="width: 120px"
           allow-clear
         >
-          <a-option value="low">低</a-option>
-          <a-option value="medium">中</a-option>
-          <a-option value="high">高</a-option>
-          <a-option value="critical">紧急</a-option>
+          <a-option value="P0">P0 致命</a-option>
+          <a-option value="P1">P1 严重</a-option>
+          <a-option value="P2">P2 一般</a-option>
+          <a-option value="P3">P3 轻微</a-option>
         </a-select>
         <a-select
           v-model="searchForm.status"
@@ -31,9 +31,9 @@
           style="width: 120px"
           allow-clear
         >
-          <a-option value="active">启用</a-option>
-          <a-option value="deprecated">废弃</a-option>
           <a-option value="draft">草稿</a-option>
+          <a-option value="reviewed">已评审</a-option>
+          <a-option value="deprecated">已废弃</a-option>
         </a-select>
         <a-button type="primary" @click="handleSearch">
           <template #icon><icon-search /></template>
@@ -84,7 +84,9 @@
       :data="tableData"
       :loading="loading"
       :pagination="pagination"
-      :row-selection="rowSelection"
+      :row-selection="{ type: 'checkbox' }"
+      v-model:selectedKeys="selectedRowKeys"
+      row-key="id"
       @page-change="handlePageChange"
     >
       <template #method="{ record }">
@@ -134,7 +136,7 @@
       title="批量打标签"
       @ok="handleBatchTag"
     >
-      <a-form layout="vertical">
+      <a-form :model="batchTagForm" layout="vertical">
         <a-form-item label="操作类型">
           <a-radio-group v-model="batchTagForm.operation">
             <a-radio value="add">添加标签</a-radio>
@@ -156,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   getTestCases,
@@ -208,23 +210,15 @@ const pagination = reactive({
 })
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: '用例名称', dataIndex: 'name', width: 200 },
+  { title: '编号', dataIndex: 'case_number', width: 180, ellipsis: true },
+  { title: '用例名称', dataIndex: 'name', width: 200, ellipsis: true },
   { title: '请求方法', dataIndex: 'method', slotName: 'method', width: 100 },
-  { title: '模块', dataIndex: 'module', width: 150 },
+  { title: '模块', dataIndex: 'module', width: 150, ellipsis: true },
   { title: '标签', dataIndex: 'tags', slotName: 'tags', width: 150 },
   { title: '优先级', dataIndex: 'priority', slotName: 'priority', width: 100 },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
-  { title: '操作', slotName: 'actions', width: 250, fixed: 'right' }
+  { title: '操作', slotName: 'actions', width: 250, fixed: 'right' as const }
 ]
-
-const rowSelection = computed(() => ({
-  type: 'checkbox' as const,
-  selectedRowKeys: selectedRowKeys.value,
-  onChange: (keys: number[]) => {
-    selectedRowKeys.value = keys
-  }
-}))
 
 const getMethodColor = (method: string) => {
   const colors: Record<string, string> = {
@@ -239,38 +233,38 @@ const getMethodColor = (method: string) => {
 
 const getPriorityColor = (priority: string) => {
   const colors: Record<string, string> = {
-    low: 'gray',
-    medium: 'blue',
-    high: 'orange',
-    critical: 'red'
+    P0: 'red',
+    P1: 'orange',
+    P2: 'blue',
+    P3: 'green',
   }
   return colors[priority] || 'gray'
 }
 
 const getPriorityText = (priority: string) => {
   const texts: Record<string, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    critical: '紧急'
+    P0: 'P0 致命',
+    P1: 'P1 严重',
+    P2: 'P2 一般',
+    P3: 'P3 轻微',
   }
   return texts[priority] || priority
 }
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
-    active: 'green',
+    draft: 'gray',
+    reviewed: 'green',
     deprecated: 'red',
-    draft: 'gray'
   }
   return colors[status] || 'gray'
 }
 
 const getStatusText = (status: string) => {
   const texts: Record<string, string> = {
-    active: '启用',
-    deprecated: '废弃',
-    draft: '草稿'
+    draft: '草稿',
+    reviewed: '已评审',
+    deprecated: '已废弃',
   }
   return texts[status] || status
 }

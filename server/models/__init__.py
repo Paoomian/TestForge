@@ -8,6 +8,12 @@ from .environment import Environment
 from .test_run import TestRun, TestRunStatus
 from .api_test_case import APITestCase
 from .api_test_case_history import APITestCaseHistory
+from .test_case_header import TestCaseHeader
+from .test_case_query_param import TestCaseQueryParam
+from .test_case_body import TestCaseBodyForm, TestCaseBodyRaw
+from .test_case_assertion import TestCaseAssertion
+from .test_case_extract import TestCaseExtract
+from .test_case_auth import TestCaseAuth
 
 __all__ = [
     "User",
@@ -22,4 +28,11 @@ __all__ = [
     "TestRunStatus",
     "APITestCase",
     "APITestCaseHistory",
+    "TestCaseHeader",
+    "TestCaseQueryParam",
+    "TestCaseBodyForm",
+    "TestCaseBodyRaw",
+    "TestCaseAssertion",
+    "TestCaseExtract",
+    "TestCaseAuth",
 ]

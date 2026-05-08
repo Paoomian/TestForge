@@ -1,7 +1,7 @@
 <template>
   <div class="api-debug">
     <a-card title="接口调试" :bordered="false">
-      <a-form layout="vertical">
+      <a-form :model="requestData" layout="vertical">
         <a-form-item label="请求方法">
           <a-space>
             <a-select v-model="requestData.method" style="width: 120px">

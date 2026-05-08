@@ -30,3 +30,12 @@ export const logout = () => {
     method: 'post'
   })
 }
+
+// 刷新token（直接用axios，不走拦截器，避免死循环）
+export const refreshToken = (refresh_token: string) => {
+  return request<TokenResponse>({
+    url: '/auth/refresh',
+    method: 'post',
+    params: { refresh_token }
+  })
+}

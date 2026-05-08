@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from database import engine, Base
-from api import auth, projects, api_cases, ui_cases, api_test_cases
+from api import auth, projects, api_cases, ui_cases, api_test_cases, environments
 
 Base.metadata.create_all(bind=engine)
 
@@ -26,6 +26,7 @@ app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", ta
 app.include_router(api_cases.router, prefix=f"{settings.API_V1_STR}/api-cases", tags=["api-cases"])
 app.include_router(ui_cases.router, prefix=f"{settings.API_V1_STR}/ui-cases", tags=["ui-cases"])
 app.include_router(api_test_cases.router, prefix=f"{settings.API_V1_STR}/api-test-cases", tags=["api-test-cases"])
+app.include_router(environments.router, prefix=f"{settings.API_V1_STR}/environments", tags=["environments"])
 
 # 禁用自动重定向斜杠
 app.router.redirect_slashes = False

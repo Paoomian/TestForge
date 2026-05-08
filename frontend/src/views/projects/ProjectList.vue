@@ -16,6 +16,7 @@
         </template>
         <template #actions="{ record }">
           <a-space>
+            <a-button type="text" size="small" @click="openEnvironmentDrawer(record)">环境管理</a-button>
             <a-button type="text" size="small">编辑</a-button>
             <a-button type="text" size="small" status="danger" @click="handleDelete(record)">删除</a-button>
           </a-space>
@@ -38,6 +39,11 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <EnvironmentDrawer
+      v-model:visible="envDrawerVisible"
+      :project-id="selectedProjectId"
+    />
   </div>
 </template>
 
@@ -46,10 +52,13 @@ import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { getProjects, createProject, deleteProject } from '@/api/project'
 import type { Project } from '@/api/project'
+import EnvironmentDrawer from './EnvironmentDrawer.vue'
 
 const loading = ref(false)
 const showCreateModal = ref(false)
 const projects = ref<Project[]>([])
+const envDrawerVisible = ref(false)
+const selectedProjectId = ref<number | null>(null)
 
 const formData = reactive({
   name: '',
@@ -104,6 +113,11 @@ const handleDelete = async (record: Project) => {
   } catch (error) {
     Message.error('项目删除失败')
   }
+}
+
+const openEnvironmentDrawer = (record: Project) => {
+  selectedProjectId.value = record.id
+  envDrawerVisible.value = true
 }
 
 onMounted(() => {
