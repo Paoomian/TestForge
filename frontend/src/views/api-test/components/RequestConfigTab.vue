@@ -1,6 +1,16 @@
 <template>
   <div class="request-config-tab">
-    <!-- 请求方法 + URL + 环境 -->
+    <!-- 环境选择 -->
+    <div style="margin-bottom: 8px;">
+      <EnvironmentSelect
+        :model-value="selectedEnvId"
+        :project-id="projectId"
+        @update:model-value="handleEnvChange"
+        @change="handleEnvSelect"
+      />
+    </div>
+
+    <!-- 请求方法 + URL -->
     <div style="display: flex; gap: 8px; margin-bottom: 16px; align-items: flex-start;">
       <HttpMethodSelect
         :model-value="formData.method"
@@ -13,11 +23,6 @@
           @update:model-value="update('url', $event)"
         />
       </div>
-      <EnvironmentSelect
-        :model-value="selectedEnvId"
-        :project-id="projectId"
-        @update:model-value="handleEnvChange"
-      />
     </div>
 
     <!-- Tabs: Headers / Query / Body / Auth -->
@@ -81,7 +86,7 @@ import EnvironmentSelect from './EnvironmentSelect.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import BodyEditor from './BodyEditor.vue'
 import AuthConfig from './AuthConfig.vue'
-import type { HeaderItem, QueryParamItem, BodyFormItem, AuthConfig as AuthConfigType } from '@/api/apiTestCase'
+import type { HeaderItem, QueryParamItem, BodyFormItem, AuthConfig as AuthConfigType, Environment } from '@/api/apiTestCase'
 
 interface FormData {
   method: string
@@ -121,10 +126,13 @@ function update(field: string, value: any) {
 
 function handleEnvChange(envId: number | null) {
   selectedEnvId.value = envId
-  // EnvironmentSelect will load the base_url, we could also load it here
   if (!envId) {
     selectedEnvBaseUrl.value = ''
   }
+}
+
+function handleEnvSelect(env: Environment | null) {
+  selectedEnvBaseUrl.value = env?.base_url || ''
 }
 
 function handleAuthChange(auth: AuthConfigType) {
