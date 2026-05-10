@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import HttpMethodSelect from './HttpMethodSelect.vue'
 import UrlInput from './UrlInput.vue'
 import EnvironmentSelect from './EnvironmentSelect.vue'
@@ -92,6 +92,7 @@ interface FormData {
   method: string
   url: string
   body_type: string
+  environment_id?: number
   headers: HeaderItem[]
   query_params: QueryParamItem[]
   body_form: BodyFormItem[]
@@ -109,8 +110,15 @@ const emit = defineEmits<{
   (e: 'update:rawContent', value: string): void
 }>()
 
-const selectedEnvId = ref<number | null>(null)
+const selectedEnvId = ref<number | null>(props.formData.environment_id || null)
 const selectedEnvBaseUrl = ref('')
+
+// 监听formData中的environment_id变化（如加载编辑数据时）
+watch(() => props.formData.environment_id, (newVal) => {
+  if (newVal !== selectedEnvId.value) {
+    selectedEnvId.value = newVal || null
+  }
+})
 
 const enabledHeadersCount = computed(() =>
   (props.formData.headers || []).filter(h => h.enabled && h.key).length
@@ -126,6 +134,8 @@ function update(field: string, value: any) {
 
 function handleEnvChange(envId: number | null) {
   selectedEnvId.value = envId
+  // 同步到formData
+  update('environment_id', envId || undefined)
   if (!envId) {
     selectedEnvBaseUrl.value = ''
   }

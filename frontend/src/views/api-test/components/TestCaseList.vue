@@ -57,11 +57,13 @@
           新建用例
         </a-button>
         <a-button
+          type="primary"
+          status="success"
           :disabled="selectedRowKeys.length === 0"
-          @click="showBatchTagModal = true"
+          @click="handleBatchRun"
         >
-          <template #icon><icon-tags /></template>
-          批量打标签
+          <template #icon><icon-play-arrow /></template>
+          批量执行
         </a-button>
         <a-popconfirm
           content="确定要删除选中的用例吗？"
@@ -102,21 +104,22 @@
           {{ getStatusText(record.status) }}
         </a-tag>
       </template>
-      <template #tags="{ record }">
-        <a-space wrap>
-          <a-tag v-for="tag in record.tags" :key="tag" size="small">{{ tag }}</a-tag>
-        </a-space>
+      <template #environment="{ record }">
+        <span v-if="record.environment_name">
+          <a-tag color="arcoblue" size="small">{{ record.environment_name }}</a-tag>
+        </span>
+        <span v-else style="color: var(--color-text-3);">-</span>
       </template>
       <template #actions="{ record }">
         <a-space>
           <a-button type="text" size="small" @click="handleEdit(record)">
             编辑
           </a-button>
+          <a-button type="text" size="small" @click="handleDebug(record)">
+            调试
+          </a-button>
           <a-button type="text" size="small" @click="handleCopy(record)">
             复制
-          </a-button>
-          <a-button type="text" size="small" @click="handleViewHistory(record)">
-            历史
           </a-button>
           <a-popconfirm
             content="确定要删除该用例吗？"
@@ -129,42 +132,17 @@
         </a-space>
       </template>
     </a-table>
-
-    <!-- 批量打标签弹窗 -->
-    <a-modal
-      v-model:visible="showBatchTagModal"
-      title="批量打标签"
-      @ok="handleBatchTag"
-    >
-      <a-form :model="batchTagForm" layout="vertical">
-        <a-form-item label="操作类型">
-          <a-radio-group v-model="batchTagForm.operation">
-            <a-radio value="add">添加标签</a-radio>
-            <a-radio value="remove">移除标签</a-radio>
-          </a-radio-group>
-        </a-form-item>
-        <a-form-item label="标签">
-          <a-select
-            v-model="batchTagForm.tags"
-            placeholder="请输入标签"
-            multiple
-            allow-create
-            allow-clear
-          />
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import {
   getTestCases,
   deleteTestCase,
   copyTestCase,
-  batchTag,
   batchDelete
 } from '@/api/apiTestCase'
 import type { APITestCase } from '@/api/apiTestCase'
@@ -175,6 +153,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const router = useRouter()
+
+onMounted(() => {
+  loadData()
+})
 
 watch(() => [props.projectId, props.module], () => {
   pagination.current = 1
@@ -183,24 +166,18 @@ watch(() => [props.projectId, props.module], () => {
 
 const emit = defineEmits<{
   (e: 'edit', record: APITestCase): void
-  (e: 'viewHistory', record: APITestCase): void
   (e: 'create'): void
+  (e: 'batch-run', cases: APITestCase[]): void
 }>()
 
 const loading = ref(false)
 const tableData = ref<APITestCase[]>([])
 const selectedRowKeys = ref<number[]>([])
-const showBatchTagModal = ref(false)
 
 const searchForm = reactive({
   keyword: '',
   priority: '',
   status: ''
-})
-
-const batchTagForm = reactive({
-  operation: 'add' as 'add' | 'remove',
-  tags: [] as string[]
 })
 
 const pagination = reactive({
@@ -214,9 +191,9 @@ const columns = [
   { title: '用例名称', dataIndex: 'name', width: 200, ellipsis: true },
   { title: '请求方法', dataIndex: 'method', slotName: 'method', width: 100 },
   { title: '模块', dataIndex: 'module', width: 150, ellipsis: true },
-  { title: '标签', dataIndex: 'tags', slotName: 'tags', width: 150 },
   { title: '优先级', dataIndex: 'priority', slotName: 'priority', width: 100 },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
+  { title: '环境', dataIndex: 'environment_id', slotName: 'environment', width: 120 },
   { title: '操作', slotName: 'actions', width: 250, fixed: 'right' as const }
 ]
 
@@ -326,6 +303,10 @@ const handleEdit = (record: APITestCase) => {
   emit('edit', record)
 }
 
+const handleDebug = (record: APITestCase) => {
+  router.push({ name: 'api-test-debug', params: { caseId: record.id } })
+}
+
 const handleCopy = async (record: APITestCase) => {
   try {
     await copyTestCase(record.id)
@@ -346,28 +327,6 @@ const handleDelete = async (record: APITestCase) => {
   }
 }
 
-const handleViewHistory = (record: APITestCase) => {
-  emit('viewHistory', record)
-}
-
-const handleBatchTag = async () => {
-  if (batchTagForm.tags.length === 0) {
-    Message.warning('请输入标签')
-    return
-  }
-
-  try {
-    await batchTag(selectedRowKeys.value, batchTagForm.tags, batchTagForm.operation)
-    Message.success('操作成功')
-    showBatchTagModal.value = false
-    batchTagForm.tags = []
-    selectedRowKeys.value = []
-    loadData()
-  } catch (error) {
-    Message.error('操作失败')
-  }
-}
-
 const handleBatchDelete = async () => {
   try {
     await batchDelete(selectedRowKeys.value)
@@ -377,6 +336,15 @@ const handleBatchDelete = async () => {
   } catch (error) {
     Message.error('删除失败')
   }
+}
+
+const handleBatchRun = () => {
+  const selectedCases = tableData.value.filter(c => selectedRowKeys.value.includes(c.id))
+  if (selectedCases.length === 0) {
+    Message.warning('请先选择要执行的用例')
+    return
+  }
+  emit('batch-run', selectedCases)
 }
 
 defineExpose({

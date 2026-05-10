@@ -35,7 +35,7 @@
 
               <a-col :span="8">
                 <a-form-item label="比较方式">
-                  <a-select v-model="assertion.operator" placeholder="选择比较方式">
+                  <a-select v-model="assertion.operator" placeholder="选择比较方式" @change="emitChange()">
                     <a-option value="equals">等于</a-option>
                     <a-option value="not_equals">不等于</a-option>
                     <a-option value="contains">包含</a-option>
@@ -55,6 +55,7 @@
                   <a-input
                     v-model="assertion.field"
                     :placeholder="getFieldPlaceholder(assertion.assertion_type)"
+                    @input="emitChange()"
                   />
                 </a-form-item>
               </a-col>
@@ -66,6 +67,7 @@
                   <a-input
                     v-model="assertion.expected"
                     placeholder="输入期望值"
+                    @input="emitChange()"
                   />
                 </a-form-item>
               </a-col>
@@ -75,6 +77,7 @@
                   <a-input
                     v-model="assertion.description"
                     placeholder="断言描述（可选）"
+                    @input="emitChange()"
                   />
                 </a-form-item>
               </a-col>

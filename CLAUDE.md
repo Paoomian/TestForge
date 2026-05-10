@@ -5,7 +5,7 @@
 集UI自动化、接口自动化和接口调试于一体的现代化测试平台。
 
 **技术栈**:
-- 后端: FastAPI + SQLAlchemy + MySQL 8.0 + Redis
+- 后端: FastAPI + SQLAlchemy + MySQL 8.0 + Redis + Celery
 - 前端: Vue 3 + TypeScript + Arco Design Vue + Pinia
 - 认证: JWT双Token (Access Token 30min + Refresh Token 7天)
 - 权限: RBAC (基于角色的访问控制)
@@ -19,7 +19,13 @@ cd server
 python -m pip install -r requirements_core.txt
 python -m pip install email-validator "bcrypt<4.0.0"
 python init_db.py  # 仅首次
+python migrations/add_batch_run_fields.py  # 升级已有数据库（首次升级时）
+
+# 终端1：启动 FastAPI
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 终端2：启动 Celery Worker（批量执行功能需要）
+celery -A celery_app worker --loglevel=info
 ```
 
 ### 前端
@@ -116,7 +122,8 @@ chore: 构建/工具链相关
 
 - [ ] UI自动化录制与执行
 - [ ] 接口自动化录制 (mitmproxy)
-- [ ] 接口自动化执行
+- [x] 接口自动化执行（单用例调试执行已完成）
+- [x] 接口自动化批量执行（含进度跟踪）
 - [ ] 测试报告生成
 - [ ] 定时任务调度 (Celery)
 - [ ] CI/CD集成
@@ -137,4 +144,4 @@ chore: 构建/工具链相关
 
 ---
 
-**最后更新**: 2026-05-08
+**最后更新**: 2026-05-10

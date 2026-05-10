@@ -64,6 +64,8 @@ export interface AuthConfig {
 export interface APITestCase {
   id: number
   project_id: number
+  environment_id?: number
+  environment_name?: string
   case_number?: string
   module?: string
   name: string
@@ -76,10 +78,8 @@ export interface APITestCase {
   auth_type: string
   setup_script?: string
   teardown_script?: string
-  tags: string[]
   priority: string
   status: string
-  version: number
   creator_id?: number
   created_at: string
   updated_at?: string
@@ -94,6 +94,7 @@ export interface APITestCase {
 
 export interface APITestCaseCreate {
   project_id: number
+  environment_id?: number
   module?: string
   name: string
   description?: string
@@ -105,7 +106,6 @@ export interface APITestCaseCreate {
   auth_type?: string
   setup_script?: string
   teardown_script?: string
-  tags?: string[]
   priority?: string
   status?: string
   headers?: HeaderItem[]
@@ -118,6 +118,7 @@ export interface APITestCaseCreate {
 }
 
 export interface APITestCaseUpdate {
+  environment_id?: number
   module?: string
   name?: string
   description?: string
@@ -129,7 +130,6 @@ export interface APITestCaseUpdate {
   auth_type?: string
   setup_script?: string
   teardown_script?: string
-  tags?: string[]
   priority?: string
   status?: string
   headers?: HeaderItem[]
@@ -139,16 +139,6 @@ export interface APITestCaseUpdate {
   assertions?: AssertionItem[]
   extracts?: ExtractItem[]
   auth?: AuthConfig
-}
-
-export interface APITestCaseHistory {
-  id: number
-  test_case_id: number
-  version: number
-  snapshot: Record<string, any>
-  change_description?: string
-  changed_by?: number
-  created_at: string
 }
 
 export interface ModuleTree {
@@ -219,7 +209,6 @@ export const getTestCases = (params?: {
   project_id?: number
   module?: string
   keyword?: string
-  tags?: string
   priority?: string
   status?: string
 }) => {
@@ -260,14 +249,6 @@ export const deleteTestCase = (id: number) => {
   })
 }
 
-export const batchTag = (case_ids: number[], tags: string[], operation: 'add' | 'remove' = 'add') => {
-  return request({
-    url: '/api-test-cases/batch-tag',
-    method: 'post',
-    data: { case_ids, tags, operation }
-  })
-}
-
 export const batchDelete = (case_ids: number[]) => {
   return request({
     url: '/api-test-cases/batch-delete',
@@ -279,20 +260,6 @@ export const batchDelete = (case_ids: number[]) => {
 export const copyTestCase = (id: number) => {
   return request<APITestCase>({
     url: `/api-test-cases/${id}/copy`,
-    method: 'post'
-  })
-}
-
-export const getHistories = (id: number) => {
-  return request<APITestCaseHistory[]>({
-    url: `/api-test-cases/${id}/histories`,
-    method: 'get'
-  })
-}
-
-export const rollbackVersion = (id: number, version: number) => {
-  return request<APITestCase>({
-    url: `/api-test-cases/${id}/rollback/${version}`,
     method: 'post'
   })
 }
@@ -344,10 +311,45 @@ export const getTemplates = () => {
   })
 }
 
-export const getTagHistory = (project_id?: number) => {
-  return request<string[]>({
-    url: '/api-test-cases/tags/history',
-    method: 'get',
-    params: { project_id }
+// ==================== 调试执行 ====================
+
+export interface RunRequest {
+  environment_id?: number
+  variables?: Record<string, string>
+}
+
+export interface AssertionRunResult {
+  assertion_type: string
+  field?: string
+  operator: string
+  expected: string
+  actual?: string
+  passed: boolean
+  error?: string
+}
+
+export interface RunResult {
+  status: 'pass' | 'fail' | 'error'
+  request_snapshot?: Record<string, any>
+  response_info?: {
+    status_code: number
+    headers: Record<string, string>
+    body: string
+    elapsed_ms: number
+    size_bytes: number
+    truncated: boolean
+  }
+  assertions: AssertionRunResult[]
+  extracted_variables: Record<string, string>
+  script_output: Record<string, any>
+  error_message?: string
+  duration_ms: number
+}
+
+export const runTestCase = (caseId: number, data: RunRequest) => {
+  return request<RunResult>({
+    url: `/test-runner/${caseId}/run`,
+    method: 'post',
+    data
   })
 }

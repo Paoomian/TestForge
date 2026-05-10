@@ -10,6 +10,7 @@ class APITestCase(Base):
     # 基础字段
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    environment_id = Column(Integer, ForeignKey("environments.id"), nullable=True)
     case_number = Column(String(50))
     module = Column(String(200))
     name = Column(String(200), nullable=False)
@@ -32,9 +33,6 @@ class APITestCase(Base):
     priority = Column(String(20), default="medium")
     status = Column(String(20), default="active")
 
-    # 版本控制
-    version = Column(Integer, default=1)
-
     # 审计字段
     creator_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -42,8 +40,8 @@ class APITestCase(Base):
 
     # 关系 - 主表
     project = relationship("Project", back_populates="api_test_cases")
+    environment = relationship("Environment")
     creator = relationship("User")
-    histories = relationship("APITestCaseHistory", back_populates="test_case", cascade="all, delete-orphan")
 
     # 关系 - 子表
     headers = relationship("TestCaseHeader", cascade="all, delete-orphan", order_by="TestCaseHeader.sort_order")

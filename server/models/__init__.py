@@ -5,9 +5,9 @@ from .project import Project
 from .ui_case import UICase
 from .api_case import APICase, HTTPMethod
 from .environment import Environment
-from .test_run import TestRun, TestRunStatus
+from .test_run import TestRun, TestRunStatus, TestRunDetail, TestRunDetailStatus
+from .test_suite import TestSuite
 from .api_test_case import APITestCase
-from .api_test_case_history import APITestCaseHistory
 from .test_case_header import TestCaseHeader
 from .test_case_query_param import TestCaseQueryParam
 from .test_case_body import TestCaseBodyForm, TestCaseBodyRaw
@@ -26,8 +26,10 @@ __all__ = [
     "Environment",
     "TestRun",
     "TestRunStatus",
+    "TestRunDetail",
+    "TestRunDetailStatus",
+    "TestSuite",
     "APITestCase",
-    "APITestCaseHistory",
     "TestCaseHeader",
     "TestCaseQueryParam",
     "TestCaseBodyForm",

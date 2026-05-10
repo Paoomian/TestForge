@@ -59,12 +59,27 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'api-run',
         name: 'api-run',
-        component: () => import('@/views/api-test/Run.vue')
+        component: () => import('@/views/api-test/TestSuiteList.vue')
       },
       {
         path: 'api-debug',
         name: 'api-debug',
         component: () => import('@/views/api-debug/Index.vue')
+      },
+      {
+        path: 'api-test-debug/:caseId',
+        name: 'api-test-debug',
+        component: () => import('@/views/api-test/TestCaseDebug.vue')
+      },
+      {
+        path: 'api-batch-tasks',
+        name: 'api-batch-tasks',
+        component: () => import('@/views/api-test/BatchRunTaskList.vue')
+      },
+      {
+        path: 'api-batch-tasks/:taskId',
+        name: 'api-batch-task-detail',
+        component: () => import('@/views/api-test/BatchRunDetail.vue')
       },
       {
         path: 'reports',

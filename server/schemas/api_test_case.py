@@ -70,6 +70,7 @@ class AuthConfig(BaseModel):
 
 class APITestCaseCreate(BaseModel):
     project_id: int
+    environment_id: Optional[int] = None
     module: Optional[str] = None
     name: str
     description: Optional[str] = None
@@ -84,7 +85,6 @@ class APITestCaseCreate(BaseModel):
     setup_script: Optional[str] = None
     teardown_script: Optional[str] = None
 
-    tags: list[str] = []
     priority: str = "P2"  # P0 / P1 / P2 / P3
     status: str = "draft"  # draft / reviewed / deprecated
 
@@ -99,6 +99,7 @@ class APITestCaseCreate(BaseModel):
 
 
 class APITestCaseUpdate(BaseModel):
+    environment_id: Optional[int] = None
     module: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
@@ -113,7 +114,6 @@ class APITestCaseUpdate(BaseModel):
     setup_script: Optional[str] = None
     teardown_script: Optional[str] = None
 
-    tags: Optional[list[str]] = None
     priority: Optional[str] = None
     status: Optional[str] = None
 
@@ -129,6 +129,8 @@ class APITestCaseUpdate(BaseModel):
 class APITestCaseInDB(BaseModel):
     id: int
     project_id: int
+    environment_id: Optional[int] = None
+    environment_name: Optional[str] = None
     case_number: Optional[str] = None
     module: Optional[str] = None
     name: str
@@ -144,11 +146,9 @@ class APITestCaseInDB(BaseModel):
     setup_script: Optional[str] = None
     teardown_script: Optional[str] = None
 
-    tags: list[str] = []
     priority: str = "P2"
     status: str = "draft"
 
-    version: int = 1
     creator_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -167,34 +167,8 @@ class APITestCaseInDB(BaseModel):
 
 
 # ============================================================
-# 历史记录 Schemas
-# ============================================================
-
-class APITestCaseHistoryBase(BaseModel):
-    version: int
-    snapshot: dict
-    change_description: Optional[str] = None
-
-
-class APITestCaseHistoryInDB(APITestCaseHistoryBase):
-    id: int
-    test_case_id: int
-    changed_by: Optional[int] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# ============================================================
 # 批量操作 Schemas
 # ============================================================
-
-class BatchTagRequest(BaseModel):
-    case_ids: list[int]
-    tags: list[str]
-    operation: str = "add"  # add / remove
-
 
 class BatchDeleteRequest(BaseModel):
     case_ids: list[int]

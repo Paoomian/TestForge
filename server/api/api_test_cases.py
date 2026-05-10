@@ -7,15 +7,13 @@ from schemas.api_test_case import (
     APITestCaseCreate,
     APITestCaseUpdate,
     APITestCaseInDB,
-    APITestCaseHistoryInDB,
-    BatchTagRequest,
     BatchDeleteRequest,
     CreateModuleRequest,
     RenameModuleRequest,
     CurlImportRequest,
 )
 from models import (
-    APITestCase, APITestCaseHistory, User,
+    APITestCase, User,
     TestCaseHeader, TestCaseQueryParam, TestCaseBodyForm, TestCaseBodyRaw,
     TestCaseAssertion, TestCaseExtract, TestCaseAuth,
 )
@@ -32,6 +30,8 @@ def _load_nested(case: APITestCase) -> dict:
     return {
         "id": case.id,
         "project_id": case.project_id,
+        "environment_id": case.environment_id,
+        "environment_name": case.environment.name if case.environment else None,
         "case_number": case.case_number,
         "module": case.module,
         "name": case.name,
@@ -44,10 +44,8 @@ def _load_nested(case: APITestCase) -> dict:
         "auth_type": case.auth_type,
         "setup_script": case.setup_script,
         "teardown_script": case.teardown_script,
-        "tags": case.tags or [],
         "priority": case.priority,
         "status": case.status,
-        "version": case.version,
         "creator_id": case.creator_id,
         "created_at": case.created_at.isoformat() if case.created_at else None,
         "updated_at": case.updated_at.isoformat() if case.updated_at else None,
@@ -128,13 +126,14 @@ def list_test_cases(
     project_id: Optional[int] = None,
     module: Optional[str] = None,
     keyword: Optional[str] = None,
-    tags: Optional[str] = None,
     priority: Optional[str] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("api_test:read"))
 ):
-    query = db.query(APITestCase).filter(
+    query = db.query(APITestCase).options(
+        joinedload(APITestCase.environment)
+    ).filter(
         ~APITestCase.name.like("__module_placeholder_%")
     )
 
@@ -152,10 +151,6 @@ def list_test_cases(
                 APITestCase.description.contains(keyword),
             )
         )
-    if tags:
-        tag_list = tags.split(",")
-        for tag in tag_list:
-            query = query.filter(APITestCase.tags.contains([tag]))
     if priority:
         query = query.filter(APITestCase.priority == priority)
     if status:
@@ -204,24 +199,6 @@ def import_curl(req: CurlImportRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/tags/history")
-def get_tag_history(
-    project_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:read"))
-):
-    query = db.query(APITestCase.tags)
-    if project_id:
-        query = query.filter(APITestCase.project_id == project_id)
-    rows = query.all()
-
-    all_tags = set()
-    for (tags,) in rows:
-        if tags:
-            all_tags.update(tags)
-    return sorted(all_tags)
 
 
 # ============================================================
@@ -282,7 +259,6 @@ def create_module(
         name=f"__module_placeholder_{data.module}__",
         method="GET",
         url="",
-        tags=[],
         priority="P2",
         status="draft",
         creator_id=current_user.id
@@ -409,16 +385,6 @@ def update_test_case(
     if not test_case:
         raise HTTPException(status_code=404, detail="Test case not found")
 
-    # 创建历史快照
-    snapshot = _load_nested(test_case)
-    history = APITestCaseHistory(
-        test_case_id=test_case.id,
-        version=test_case.version,
-        snapshot=snapshot,
-        changed_by=current_user.id
-    )
-    db.add(history)
-
     # 更新主表字段
     main_fields = case_in.model_dump(exclude={"headers", "query_params", "body_form", "body_raw", "assertions", "extracts", "auth"}, exclude_unset=True)
     for field, value in main_fields.items():
@@ -447,7 +413,6 @@ def update_test_case(
         )
         _create_children(db, test_case.id, create_data)
 
-    test_case.version += 1
     db.commit()
     db.refresh(test_case)
     return _load_nested(test_case)
@@ -466,29 +431,6 @@ def delete_test_case(
     db.delete(test_case)
     db.commit()
     return {"message": "Test case deleted successfully"}
-
-
-@router.post("/batch-tag")
-def batch_tag(
-    request: BatchTagRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:write"))
-):
-    cases = db.query(APITestCase).filter(
-        APITestCase.id.in_(request.case_ids)).all()
-
-    for case in cases:
-        if request.operation == "add":
-            existing_tags = set(case.tags or [])
-            existing_tags.update(request.tags)
-            case.tags = list(existing_tags)
-        elif request.operation == "remove":
-            existing_tags = set(case.tags or [])
-            existing_tags.difference_update(request.tags)
-            case.tags = list(existing_tags)
-
-    db.commit()
-    return {"message": f"Successfully tagged {len(cases)} test cases"}
 
 
 @router.post("/batch-delete")
@@ -525,6 +467,7 @@ def copy_test_case(
 
     new_case = APITestCase(
         project_id=original.project_id,
+        environment_id=original.environment_id,
         case_number=case_number,
         module=original.module,
         name=f"{original.name} (副本)",
@@ -537,7 +480,6 @@ def copy_test_case(
         auth_type=original.auth_type,
         setup_script=original.setup_script,
         teardown_script=original.teardown_script,
-        tags=original.tags,
         priority=original.priority,
         status=original.status,
         creator_id=current_user.id,
@@ -568,81 +510,3 @@ def copy_test_case(
     db.commit()
     db.refresh(new_case)
     return _load_nested(new_case)
-
-
-@router.get("/{case_id}/histories", response_model=List[APITestCaseHistoryInDB])
-def get_histories(
-    case_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:read"))
-):
-    test_case = db.query(APITestCase).filter(APITestCase.id == case_id).first()
-    if not test_case:
-        raise HTTPException(status_code=404, detail="Test case not found")
-
-    histories = db.query(APITestCaseHistory).filter(
-        APITestCaseHistory.test_case_id == case_id
-    ).order_by(APITestCaseHistory.version.desc()).all()
-
-    return histories
-
-
-@router.post("/{case_id}/rollback/{version}", response_model=APITestCaseInDB)
-def rollback_version(
-    case_id: int,
-    version: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:write"))
-):
-    test_case = db.query(APITestCase).filter(APITestCase.id == case_id).first()
-    if not test_case:
-        raise HTTPException(status_code=404, detail="Test case not found")
-
-    history = db.query(APITestCaseHistory).filter(
-        APITestCaseHistory.test_case_id == case_id,
-        APITestCaseHistory.version == version
-    ).first()
-
-    if not history:
-        raise HTTPException(status_code=404, detail="Version not found")
-
-    # 保存当前版本到历史
-    current_snapshot = _load_nested(test_case)
-    new_history = APITestCaseHistory(
-        test_case_id=test_case.id,
-        version=test_case.version,
-        snapshot=current_snapshot,
-        change_description=f"Rollback to version {version}",
-        changed_by=current_user.id
-    )
-    db.add(new_history)
-
-    # 恢复历史快照中的主表字段
-    snapshot = history.snapshot
-    main_fields = ["name", "description", "module", "method", "url", "body_type", "auth_type",
-                   "preconditions", "remark", "setup_script", "teardown_script", "tags", "priority", "status"]
-    for field in main_fields:
-        if field in snapshot:
-            setattr(test_case, field, snapshot[field])
-
-    # 恢复子表
-    _delete_children(db, test_case.id)
-    create_data = APITestCaseCreate(
-        project_id=test_case.project_id,
-        name=test_case.name,
-        method=test_case.method,
-        url=test_case.url,
-        headers=snapshot.get("headers", []),
-        query_params=snapshot.get("query_params", []),
-        body_form=snapshot.get("body_form", []),
-        body_raw=snapshot.get("body_raw"),
-        assertions=snapshot.get("assertions", []),
-        extracts=snapshot.get("extracts", []),
-        auth=snapshot.get("auth"),
-    )
-    _create_children(db, test_case.id, create_data)
-
-    test_case.version += 1
-    db.commit()
-    db.refresh(test_case)
-    return _load_nested(test_case)

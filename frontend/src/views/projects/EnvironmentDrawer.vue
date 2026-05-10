@@ -6,14 +6,14 @@
     :footer="false"
     @cancel="emit('update:visible', false)"
   >
-    <div style="margin-bottom: 16px; text-align: right;">
+    <div class="drawer-toolbar">
       <a-button type="primary" size="small" @click="openCreateModal">
         <template #icon><icon-plus /></template>
         新增环境
       </a-button>
     </div>
 
-    <a-table :columns="columns" :data="environments" :loading="loading" :pagination="false">
+    <a-table :columns="columns" :data="environments" :loading="loading" :pagination="false" :bordered="false">
       <template #name="{ record }">
         <a-tag :color="getEnvColor(record.name)">{{ record.name }}</a-tag>
       </template>
@@ -22,7 +22,7 @@
           <a-tag v-for="(_, key) in record.variables" :key="key" size="small" color="gray">
             {{ key }}
           </a-tag>
-          <span v-if="!record.variables || Object.keys(record.variables).length === 0" style="color: var(--color-text-3)">
+          <span v-if="!record.variables || Object.keys(record.variables).length === 0" class="empty-text">
             无变量
           </span>
         </a-space>
@@ -236,13 +236,24 @@ watch(() => props.visible, (val) => {
 </script>
 
 <style scoped>
+.drawer-toolbar {
+  margin-bottom: 16px;
+  text-align: right;
+}
+
 .variables-editor {
   width: 100%;
 }
+
 .variable-row {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
   align-items: center;
+}
+
+.empty-text {
+  color: var(--gray-400);
+  font-size: var(--font-size-sm);
 }
 </style>

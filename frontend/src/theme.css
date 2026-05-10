@@ -1,0 +1,171 @@
+/* ========================================
+ * TestForge 主题变量系统
+ * 风格: 淡蓝紫低饱和渐变、清新科技感
+ * 与登录页保持统一
+ * ======================================== */
+
+:root {
+  /* ---- 主色 (Primary) ---- */
+  --primary-50: #f5f3ff;
+  --primary-100: #ede9fe;
+  --primary-200: #ddd6fe;
+  --primary-300: #c4b5fd;
+  --primary-400: #a78bfa;
+  --primary-500: #8b5cf6;
+  --primary-600: #7c3aed;
+  --primary-700: #6d28d9;
+
+  /* ---- 辅助色: 靛蓝 (Indigo) ---- */
+  --indigo-50: #eef2ff;
+  --indigo-100: #e0e7ff;
+  --indigo-200: #c7d2fe;
+  --indigo-300: #a5b4fc;
+  --indigo-400: #818cf8;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --indigo-700: #4338ca;
+  --indigo-800: #3730a3;
+  --indigo-900: #312e81;
+  --indigo-950: #1e1b4b;
+
+  /* ---- 辅助色: 蓝色 (Blue) ---- */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+
+  /* ---- 辅助色: 青色 (Cyan) ---- */
+  --cyan-50: #ecfeff;
+  --cyan-100: #cffafe;
+  --cyan-200: #a5f3fc;
+  --cyan-300: #67e8f9;
+
+  /* ---- 中性色 (Neutral / Gray) ---- */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+
+  /* ---- 功能色 (Semantic) ---- */
+  --success-light: #ecfdf5;
+  --success-main: #10b981;
+  --success-dark: #065f46;
+  --warning-light: #fffbeb;
+  --warning-main: #f59e0b;
+  --warning-dark: #92400e;
+  --danger-light: #fef2f2;
+  --danger-main: #ef4444;
+  --danger-dark: #991b1b;
+  --info-light: #eff6ff;
+  --info-main: #3b82f6;
+  --info-dark: #1e40af;
+
+  /* ---- 渐变 ---- */
+  --gradient-primary: linear-gradient(135deg, #a78bfa 0%, #818cf8 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  --gradient-bg: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  --gradient-bg-soft: linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%);
+  --gradient-card-border: linear-gradient(135deg, rgba(224, 212, 252, 0.5), rgba(199, 210, 254, 0.5));
+  --gradient-sidebar: linear-gradient(180deg, #f9fafb 0%, #f5f3ff 100%);
+  --gradient-header: linear-gradient(90deg, rgba(255,255,255,0.95), rgba(245,243,255,0.95));
+
+  /* ---- 圆角 (Border Radius) ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+
+  /* ---- 阴影 (Shadow) ---- */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --shadow-primary: 0 4px 12px rgba(129, 140, 248, 0.3);
+  --shadow-primary-hover: 0 8px 20px rgba(129, 140, 248, 0.4);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.02), 0 4px 12px rgba(99, 102, 241, 0.06);
+  --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.03), 0 8px 24px rgba(99, 102, 241, 0.1);
+  --shadow-header: 0 1px 3px rgba(0,0,0,0.02), 0 2px 8px rgba(99, 102, 241, 0.04);
+
+  /* ---- 间距 (Spacing) ---- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* ---- 字体 ---- */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
+  --font-size-4xl: 32px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ---- 动画 ---- */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* ---- 布局 ---- */
+  --header-height: 60px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+  --content-padding: 24px;
+
+  /* ========================================
+   * Arco Design 变量覆盖
+   * 让 Arco 组件自动适配主题
+   * ======================================== */
+  --color-primary-light-1: #ede9fe;
+  --color-primary-light-2: #ddd6fe;
+  --color-primary-light-3: #c4b5fd;
+  --color-primary-light-4: #a78bfa;
+  --color-primary-6: #8b5cf6;
+  --color-primary-light-6: #7c3aed;
+  --color-primary-light-7: #6d28d9;
+
+  /* Arco 边框圆角 */
+  --border-radius-small: var(--radius-sm);
+  --border-radius-medium: var(--radius-md);
+  --border-radius-large: var(--radius-lg);
+
+  /* Arco 边框 */
+  --color-border: #e8e0f0;
+  --color-border-2: #ede9fe;
+  --color-neutral-3: #e5e7eb;
+
+  /* Arco 背景 */
+  --color-bg-1: #faf9ff;
+  --color-bg-2: #f5f3ff;
+  --color-bg-3: #f0eef9;
+  --color-bg-4: #e8e0f0;
+  --color-bg-white: #ffffff;
+
+  /* Arco 文字 */
+  --color-text-1: #1e1b4b;
+  --color-text-2: #374151;
+  --color-text-3: #6b7280;
+  --color-text-4: #9ca3af;
+}

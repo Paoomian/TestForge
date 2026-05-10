@@ -15,7 +15,19 @@
       "Bash(curl -X POST http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin123\"}')",
       "Bash(curl -m 5 http://localhost:8000/health)",
       "Bash(tasklist)",
-      "Bash(python -c \"from database import engine; from sqlalchemy import inspect; inspector = inspect\\(engine\\); print\\('Tables:', inspector.get_table_names\\(\\)\\)\")"
+      "Bash(python -c \"from database import engine; from sqlalchemy import inspect; inspector = inspect\\(engine\\); print\\('Tables:', inspector.get_table_names\\(\\)\\)\")",
+      "Bash(npx vue-tsc *)",
+      "Bash(npm run *)",
+      "Bash(python -c \"from models.quest import Quest; from models.quest_task import QuestTask; from schemas.quest import QuestWithTask, RunResult; print\\('OK'\\)\")",
+      "Bash(python -c \"from models.quest import Quest; from models.quest_task import QuestTask; from schemas.quest import QuestWithTask, UserQuestStats; from schemas.test_run import RunResult, RunRequest; print\\('OK'\\)\")",
+      "Bash(python -c \"from main import app; print\\('OK'\\)\")",
+      "Bash(python -c \"from main import app; from api.quests import router; print\\('Backend OK'\\)\")",
+      "Bash(python -c \"from main import app; print\\('Backend OK'\\)\")",
+      "Bash(python migrations/add_environment_id_to_api_test_cases.py upgrade)",
+      "Bash(python -c \"from models.api_test_case import APITestCase; print\\('Model OK'\\)\")",
+      "Bash(python -c \"from schemas.api_test_case import APITestCaseCreate, APITestCaseUpdate, APITestCaseInDB; print\\('Schema OK'\\)\")",
+      "Bash(python migrations/remove_history_table.py)",
+      "Bash(python -c \"from api.api_test_cases import router; print\\('Backend OK'\\)\")"
     ]
   }
 }

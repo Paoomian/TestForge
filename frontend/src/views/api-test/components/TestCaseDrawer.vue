@@ -183,6 +183,7 @@ const rawContent = ref('')
 const formData = reactive({
   id: undefined as number | undefined,
   project_id: 0,
+  environment_id: undefined as number | undefined,
   case_number: '',
   module: '',
   name: '',
@@ -195,7 +196,6 @@ const formData = reactive({
   auth_type: 'none',
   setup_script: '',
   teardown_script: '',
-  tags: [] as string[],
   priority: 'P2',
   status: 'draft',
   headers: [] as HeaderItem[],
@@ -263,6 +263,7 @@ const loadEditData = async (data: APITestCase) => {
 
   formData.id = fullData.id
   formData.project_id = fullData.project_id
+  formData.environment_id = fullData.environment_id
   formData.case_number = fullData.case_number || ''
   formData.module = fullData.module || ''
   formData.name = fullData.name
@@ -275,7 +276,6 @@ const loadEditData = async (data: APITestCase) => {
   formData.auth_type = fullData.auth_type || 'none'
   formData.setup_script = fullData.setup_script || ''
   formData.teardown_script = fullData.teardown_script || ''
-  formData.tags = fullData.tags || []
   formData.priority = fullData.priority || 'P2'
   formData.status = fullData.status || 'draft'
   formData.headers = (fullData.headers || []).map(h => ({ ...h }))
@@ -291,6 +291,7 @@ const loadEditData = async (data: APITestCase) => {
 const resetForm = () => {
   formData.id = undefined
   formData.project_id = props.defaultProjectId || 0
+  formData.environment_id = undefined
   formData.case_number = ''
   formData.module = ''
   formData.name = ''
@@ -303,7 +304,6 @@ const resetForm = () => {
   formData.auth_type = 'none'
   formData.setup_script = ''
   formData.teardown_script = ''
-  formData.tags = []
   formData.priority = 'P2'
   formData.status = 'draft'
   formData.headers = []
@@ -353,6 +353,7 @@ const handleSubmit = async (saveStatus?: string) => {
 
     if (isEdit.value && formData.id) {
       const updateData: APITestCaseUpdate = {
+        environment_id: formData.environment_id,
         name: formData.name,
         description: formData.description,
         module: formData.module,
@@ -364,7 +365,6 @@ const handleSubmit = async (saveStatus?: string) => {
         auth_type: formData.auth_type,
         setup_script: formData.setup_script,
         teardown_script: formData.teardown_script,
-        tags: formData.tags,
         priority: formData.priority,
         status: saveStatus || formData.status,
         headers: formData.headers,
@@ -380,6 +380,7 @@ const handleSubmit = async (saveStatus?: string) => {
     } else {
       const createData: APITestCaseCreate = {
         project_id: formData.project_id,
+        environment_id: formData.environment_id,
         name: formData.name,
         description: formData.description,
         module: formData.module,
@@ -391,7 +392,6 @@ const handleSubmit = async (saveStatus?: string) => {
         auth_type: formData.auth_type,
         setup_script: formData.setup_script,
         teardown_script: formData.teardown_script,
-        tags: formData.tags,
         priority: formData.priority,
         status: saveStatus || formData.status,
         headers: formData.headers,

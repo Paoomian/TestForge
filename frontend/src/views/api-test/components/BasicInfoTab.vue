@@ -53,7 +53,7 @@
     </a-row>
 
     <a-row :gutter="16">
-      <a-col :span="8">
+      <a-col :span="12">
         <a-form-item label="优先级">
           <a-select
             :model-value="formData.priority"
@@ -74,7 +74,7 @@
           </a-select>
         </a-form-item>
       </a-col>
-      <a-col :span="8">
+      <a-col :span="12">
         <a-form-item label="用例状态">
           <a-select
             :model-value="formData.status"
@@ -84,18 +84,6 @@
             <a-option value="reviewed">已评审</a-option>
             <a-option value="deprecated">已废弃</a-option>
           </a-select>
-        </a-form-item>
-      </a-col>
-      <a-col :span="8">
-        <a-form-item label="标签">
-          <a-select
-            :model-value="formData.tags"
-            placeholder="添加标签"
-            multiple
-            allow-create
-            allow-clear
-            @update:model-value="update('tags', $event)"
-          />
         </a-form-item>
       </a-col>
     </a-row>
@@ -141,7 +129,6 @@ interface FormData {
   case_number?: string
   priority: string
   status: string
-  tags: string[]
   description: string
   preconditions: string
   remark: string

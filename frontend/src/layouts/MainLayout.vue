@@ -2,12 +2,26 @@
   <a-layout class="layout-container">
     <a-layout-header class="layout-header">
       <div class="header-left">
-        <div class="logo">测试平台</div>
+        <div class="logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="8" fill="url(#header-logo-grad)"/>
+              <path d="M10 16L14 20L22 12" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs>
+                <linearGradient id="header-logo-grad" x1="0" y1="0" x2="32" y2="32">
+                  <stop stop-color="#A78BFA"/>
+                  <stop offset="1" stop-color="#818CF8"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="logo-text">TestForge</span>
+        </div>
       </div>
       <div class="header-right">
         <a-dropdown>
           <div class="user-info">
-            <a-avatar :size="32">
+            <a-avatar :size="32" class="user-avatar">
               <icon-user />
             </a-avatar>
             <span class="username">{{ userStore.userInfo?.username }}</span>
@@ -38,10 +52,11 @@
 
     <a-layout>
       <a-layout-sider
-        :width="200"
+        :width="220"
         :collapsed="collapsed"
         collapsible
         @collapse="handleCollapse"
+        class="layout-sider"
       >
         <a-menu
           :default-selected-keys="[currentRoute]"
@@ -80,7 +95,8 @@
             <template #title>接口自动化</template>
             <a-menu-item key="api-test-manage">用例管理</a-menu-item>
             <a-menu-item key="api-record">录制用例</a-menu-item>
-            <a-menu-item key="api-run">执行测试</a-menu-item>
+            <a-menu-item key="api-run">任务配置</a-menu-item>
+            <a-menu-item key="api-batch-tasks">执行任务</a-menu-item>
           </a-sub-menu>
 
           <a-menu-item key="api-debug">
@@ -102,7 +118,11 @@
 
       <a-layout-content class="layout-content">
         <div class="content-wrapper">
-          <router-view />
+          <router-view v-slot="{ Component }">
+            <keep-alive :include="cachedViews">
+              <component :is="Component" />
+            </keep-alive>
+          </router-view>
         </div>
       </a-layout-content>
     </a-layout>
@@ -121,6 +141,9 @@ const userStore = useUserStore()
 
 const collapsed = ref(false)
 const currentRoute = computed(() => route.name as string)
+
+// 需要缓存的页面组件名称
+const cachedViews = ['TestCaseManage']
 
 const handleCollapse = (val: boolean) => {
   collapsed.value = val
@@ -146,16 +169,33 @@ const handleLogout = () => {
 <style scoped>
 .layout-container {
   height: 100vh;
+  background: var(--gray-50);
 }
 
 .layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: white;
-  border-bottom: 1px solid #e5e6eb;
+  background: var(--gradient-header);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(224, 212, 252, 0.3);
   padding: 0 24px;
   height: 60px;
+  box-shadow: var(--shadow-header);
+  position: relative;
+  z-index: 10;
+}
+
+/* 底部渐变装饰线 */
+.layout-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+  opacity: 0.4;
 }
 
 .header-left {
@@ -164,9 +204,30 @@ const handleLogout = () => {
 }
 
 .logo {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1d2129;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.logo-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.3px;
 }
 
 .header-right {
@@ -179,27 +240,39 @@ const handleLogout = () => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
 }
 
 .user-info:hover {
-  background: #f7f8fa;
+  background: var(--primary-50);
+}
+
+.user-avatar {
+  background: var(--gradient-primary) !important;
+  color: white !important;
 }
 
 .username {
-  font-size: 14px;
-  color: #1d2129;
+  font-size: var(--font-size-base);
+  color: var(--gray-700);
+  font-weight: var(--font-weight-medium);
+}
+
+.layout-sider {
+  background: var(--gradient-sidebar) !important;
+  border-right: 1px solid rgba(224, 212, 252, 0.25) !important;
+  box-shadow: 2px 0 8px rgba(99, 102, 241, 0.03);
 }
 
 .layout-content {
-  background: #f7f8fa;
+  background: var(--gray-50);
   overflow: auto;
 }
 
 .content-wrapper {
-  padding: 24px;
-  min-height: calc(100vh - 60px);
+  padding: var(--content-padding);
+  min-height: calc(100vh - var(--header-height));
 }
 </style>

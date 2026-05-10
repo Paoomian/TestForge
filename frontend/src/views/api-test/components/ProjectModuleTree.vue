@@ -81,7 +81,7 @@
       @ok="handleConfirmRenameModule"
       @cancel="renameModuleVisible = false"
     >
-      <a-form layout="vertical">
+      <a-form :model="{}" layout="vertical">
         <a-form-item label="当前名称">
           <a-input :model-value="renameModuleOldName" disabled />
         </a-form-item>
@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { getProjects } from '@/api/project'
 import { getModuleTree, createModule, deleteModule, renameModule } from '@/api/apiTestCase'
@@ -340,6 +340,11 @@ const loadData = async () => {
 }
 
 onMounted(() => {
+  loadData()
+})
+
+// keep-alive 组件被激活时刷新数据
+onActivated(() => {
   loadData()
 })
 

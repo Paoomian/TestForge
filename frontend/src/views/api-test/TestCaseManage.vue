@@ -4,10 +4,12 @@
       <!-- 左侧项目树 -->
       <a-layout-sider
         :width="300"
-        :style="{ background: 'var(--color-bg-2)', borderRight: '1px solid var(--color-border)' }"
+        class="tree-sider"
       >
-        <div style="padding: 16px">
-          <h3 style="margin-bottom: 16px">项目与模块</h3>
+        <div class="tree-header">
+          <h3 class="tree-title">项目与模块</h3>
+        </div>
+        <div class="tree-content">
           <ProjectModuleTree
             ref="treeRef"
             @select="handleTreeSelect"
@@ -16,14 +18,14 @@
       </a-layout-sider>
 
       <!-- 右侧用例列表 -->
-      <a-layout-content style="padding: 16px">
+      <a-layout-content class="list-content">
         <TestCaseList
           ref="listRef"
           :project-id="selectedProjectId"
           :module="selectedModule"
           @create="handleCreate"
           @edit="handleEdit"
-          @view-history="handleViewHistory"
+          @batch-run="handleBatchRun"
         />
       </a-layout-content>
     </a-layout>
@@ -36,66 +38,32 @@
       @success="handleDrawerSuccess"
     />
 
-    <!-- 历史版本弹窗 -->
-    <a-modal
-      v-model:visible="historyVisible"
-      title="历史版本"
-      width="800px"
-      :footer="false"
-    >
-      <a-table
-        :columns="historyColumns"
-        :data="historyData"
-        :loading="historyLoading"
-        :pagination="false"
-      >
-        <template #version="{ record }">
-          <a-tag>v{{ record.version }}</a-tag>
-        </template>
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="handleViewSnapshot(record)">
-              查看
-            </a-button>
-            <a-popconfirm
-              content="确定要回滚到此版本吗？"
-              @ok="handleRollback(record)"
-            >
-              <a-button type="text" size="small">
-                回滚
-              </a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-      </a-table>
-    </a-modal>
-
-    <!-- 快照查看弹窗 -->
-    <a-modal
-      v-model:visible="snapshotVisible"
-      title="版本快照"
-      width="800px"
-      :footer="false"
-    >
-      <JsonEditor
-        v-model="snapshotJson"
-        height="500px"
-        :readonly="true"
-      />
-    </a-modal>
+    <!-- 批量执行抽屉 -->
+    <BatchRunDrawer
+      v-model:visible="batchRunDrawerVisible"
+      :cases="batchRunCases"
+      :project-id="selectedProjectId"
+      @success="handleBatchRunSuccess"
+    />
   </div>
 </template>
 
+<script lang="ts">
+export default {
+  name: 'TestCaseManage'
+}
+</script>
+
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { useRouter } from 'vue-router'
 import ProjectModuleTree from './components/ProjectModuleTree.vue'
 import TestCaseList from './components/TestCaseList.vue'
 import TestCaseDrawer from './components/TestCaseDrawer.vue'
-import JsonEditor from '@/components/JsonEditor.vue'
-import { getHistories, rollbackVersion } from '@/api/apiTestCase'
-import type { APITestCase, APITestCaseHistory } from '@/api/apiTestCase'
+import BatchRunDrawer from './components/BatchRunDrawer.vue'
+import type { APITestCase } from '@/api/apiTestCase'
 
+const router = useRouter()
 const treeRef = ref()
 const listRef = ref()
 
@@ -105,20 +73,9 @@ const selectedModule = ref<string>()
 const drawerVisible = ref(false)
 const editingCase = ref<APITestCase | null>(null)
 
-const historyVisible = ref(false)
-const historyLoading = ref(false)
-const historyData = ref<APITestCaseHistory[]>([])
-const currentHistoryCase = ref<APITestCase | null>(null)
-
-const snapshotVisible = ref(false)
-const snapshotJson = ref('{}')
-
-const historyColumns = [
-  { title: '版本', dataIndex: 'version', slotName: 'version', width: 100 },
-  { title: '变更说明', dataIndex: 'change_description', width: 200 },
-  { title: '变更时间', dataIndex: 'created_at', width: 180 },
-  { title: '操作', slotName: 'actions', width: 150 }
-]
+// 批量执行
+const batchRunDrawerVisible = ref(false)
+const batchRunCases = ref<APITestCase[]>([])
 
 const handleTreeSelect = (data: { projectId?: number; module?: string }) => {
   selectedProjectId.value = data.projectId
@@ -144,44 +101,48 @@ const handleDrawerSuccess = () => {
   }
 }
 
-const handleViewHistory = async (record: APITestCase) => {
-  currentHistoryCase.value = record
-  historyVisible.value = true
-  historyLoading.value = true
-
-  try {
-    historyData.value = await getHistories(record.id)
-  } catch (error) {
-    Message.error('加载历史版本失败')
-  } finally {
-    historyLoading.value = false
-  }
+const handleBatchRun = (cases: APITestCase[]) => {
+  batchRunCases.value = cases
+  batchRunDrawerVisible.value = true
 }
 
-const handleViewSnapshot = (record: APITestCaseHistory) => {
-  snapshotJson.value = JSON.stringify(record.snapshot, null, 2)
-  snapshotVisible.value = true
-}
-
-const handleRollback = async (record: APITestCaseHistory) => {
-  if (!currentHistoryCase.value) return
-
-  try {
-    await rollbackVersion(currentHistoryCase.value.id, record.version)
-    Message.success('回滚成功')
-    historyVisible.value = false
-    if (listRef.value) {
-      listRef.value.refresh()
-    }
-  } catch (error) {
-    Message.error('回滚失败')
-  }
+const handleBatchRunSuccess = (runId: number) => {
+  // 跳转到任务详情页
+  router.push({ name: 'api-batch-task-detail', params: { taskId: runId } })
 }
 </script>
 
 <style scoped>
 .test-case-manage {
-  height: calc(100vh - 60px);
-  background: var(--color-bg-1);
+  height: calc(100vh - var(--header-height));
+  background: var(--gray-50);
+  margin: calc(-1 * var(--content-padding));
+}
+
+.tree-sider {
+  background: white !important;
+  border-right: 1px solid rgba(224, 212, 252, 0.25) !important;
+  box-shadow: 2px 0 8px rgba(99, 102, 241, 0.03);
+}
+
+.tree-header {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid rgba(224, 212, 252, 0.2);
+}
+
+.tree-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-800);
+}
+
+.tree-content {
+  padding: 12px 8px;
+}
+
+.list-content {
+  padding: var(--content-padding);
+  background: var(--gray-50);
 }
 </style>
