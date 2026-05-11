@@ -177,6 +177,36 @@
 - 运行时可覆盖默认配置（环境、并发数、失败策略、变量）
 - 卡片布局span=6（4列），展示项目名蓝色标签
 
+## 测试报告功能 (2026-05-11)
+
+### 后端
+- [x] 新增测试报告 Schema (TestSummary, PerformanceStats, FailureAnalysis, BatchRunReport)
+- [x] 新增 GET /batch-runs/{id}/report 接口
+- [x] 实现统计计算逻辑（通过率、P50/P90/P95、Top5、失败分类）
+- [x] 实现失败原因分类（断言失败/请求超时/连接失败/执行异常）
+
+### 前端
+- [x] batchRun.ts 新增 getBatchRunReport API 和类型定义
+- [x] 创建 TestSummaryCard.vue（测试摘要卡片）
+- [x] 创建 PerformanceStatsCard.vue（性能统计 + echarts 条形图）
+- [x] 创建 FailureAnalysisCard.vue（失败分析 + echarts 饼图）
+- [x] 创建 TestReportPanel.vue（Tab 切换容器）
+- [x] 集成到 BatchRunDetail.vue
+
+### 技术决策
+- 测试报告实时计算，不存储冗余数据
+- P90/P95 使用 nearest-rank 算法
+- 失败分类基于 error_message 关键词匹配
+- 报告仅在任务完成后显示（done/error/cancelled）
+
+## Bug修复与优化 (2026-05-11)
+
+- [x] 修复任务详情环境显示问题（显示环境名称而非ID）
+- [x] 修复批量删除用例外键约束错误（外键改为 ON DELETE SET NULL）
+- [x] 任务配置执行时检查用例是否存在（已删除则提示）
+- [x] 导航名称优化："执行任务" → "任务记录"
+- [x] 任务详情页优化：精简任务信息卡片，执行中显示进度/完成后显示报告
+
 ---
 
-**最后更新**: 2026-05-10
+**最后更新**: 2026-05-11

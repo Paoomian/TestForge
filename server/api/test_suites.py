@@ -239,6 +239,19 @@ async def run_suite(
     db.add(test_run)
     db.flush()
 
+    # 检查用例是否存在
+    existing_cases = db.query(APITestCase.id).filter(
+        APITestCase.id.in_(suite.case_ids)
+    ).all()
+    existing_case_ids = {c.id for c in existing_cases}
+    missing_case_ids = [cid for cid in suite.case_ids if cid not in existing_case_ids]
+
+    if missing_case_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"以下用例已被删除: {missing_case_ids}，请重新创建任务配置"
+        )
+
     # 创建执行明细
     for order, case_id in enumerate(suite.case_ids, start=1):
         detail = TestRunDetail(

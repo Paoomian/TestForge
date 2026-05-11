@@ -30,6 +30,7 @@ export interface BatchRunInfo {
   status: 'pending' | 'running' | 'done' | 'error' | 'cancelled'
   case_ids: number[]
   environment_id?: number
+  environment_name?: string
   concurrency: number
   failure_strategy: string
   variables: Record<string, string>
@@ -82,6 +83,67 @@ export interface CaseDetailFull {
   duration_ms: number
   started_at?: string
   finished_at?: string
+}
+
+// ==================== 测试报告类型 ====================
+
+export interface TestSummary {
+  total_count: number
+  pass_count: number
+  fail_count: number
+  error_count: number
+  skipped_count: number
+  pass_rate: number
+  start_time?: string
+  end_time?: string
+  duration_ms?: number
+  creator_id?: number
+  creator_name?: string
+}
+
+export interface APICallStat {
+  case_id: number
+  case_name?: string
+  case_number?: string
+  api_duration_ms: number
+}
+
+export interface PerformanceStats {
+  avg_response_ms: number
+  min_response_ms: number
+  max_response_ms: number
+  p50_response_ms: number
+  p90_response_ms: number
+  p95_response_ms: number
+  total_requests: number
+  slowest_top5: APICallStat[]
+  fastest_top5: APICallStat[]
+}
+
+export interface AssertionDetail {
+  assertion_type: string
+  field?: string
+  operator: string
+  expected: string
+  actual?: string
+}
+
+export interface FailureCategory {
+  category: string
+  count: number
+  percentage: number
+  cases: { detail_id: number; case_id: number; case_name?: string; error_message: string; assertions?: AssertionDetail[] }[]
+}
+
+export interface FailureAnalysis {
+  total_fail_count: number
+  categories: FailureCategory[]
+}
+
+export interface BatchRunReport {
+  summary: TestSummary
+  performance: PerformanceStats
+  failure_analysis: FailureAnalysis
 }
 
 export interface WSMessage {
@@ -145,6 +207,13 @@ export const deleteBatchRun = (id: number) => {
   return request({
     url: `/batch-runs/${id}`,
     method: 'delete'
+  })
+}
+
+export const getBatchRunReport = (id: number) => {
+  return request<BatchRunReport>({
+    url: `/batch-runs/${id}/report`,
+    method: 'get'
   })
 }
 

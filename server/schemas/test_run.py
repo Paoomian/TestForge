@@ -119,6 +119,7 @@ class BatchRunInfo(BaseModel):
     status: str
     case_ids: list[int]
     environment_id: Optional[int] = None
+    environment_name: Optional[str] = None
     concurrency: int
     failure_strategy: str
     variables: dict = {}
@@ -137,6 +138,67 @@ class BatchRunInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================
+# 测试报告 Schemas
+# ============================================================
+
+class TestSummary(BaseModel):
+    """测试摘要"""
+    total_count: int
+    pass_count: int
+    fail_count: int
+    error_count: int
+    skipped_count: int
+    pass_rate: float  # 百分比 0-100, 保留1位小数
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    duration_ms: Optional[int] = None
+    creator_id: Optional[int] = None
+    creator_name: Optional[str] = None
+
+
+class APICallStat(BaseModel):
+    """单条接口性能统计"""
+    case_id: int
+    case_name: Optional[str] = None
+    case_number: Optional[str] = None
+    api_duration_ms: int
+
+
+class PerformanceStats(BaseModel):
+    """性能统计"""
+    avg_response_ms: float  # 平均响应时间(ms)
+    min_response_ms: int  # 最快响应时间
+    max_response_ms: int  # 最慢响应时间
+    p50_response_ms: int  # P50
+    p90_response_ms: int  # P90
+    p95_response_ms: int  # P95
+    total_requests: int  # 有效请求总数（有 elapsed_ms 的）
+    slowest_top5: list[APICallStat]  # 最慢 Top5
+    fastest_top5: list[APICallStat]  # 最快 Top5
+
+
+class FailureCategory(BaseModel):
+    """失败分类"""
+    category: str  # 分类名，如 "断言失败" / "请求超时" / "执行异常"
+    count: int
+    percentage: float  # 占全部失败+错误的百分比
+    cases: list[dict]  # [{case_id, case_name, error_message}]
+
+
+class FailureAnalysis(BaseModel):
+    """失败分析"""
+    total_fail_count: int  # fail + error 总数
+    categories: list[FailureCategory]
+
+
+class BatchRunReport(BaseModel):
+    """完整测试报告"""
+    summary: TestSummary
+    performance: PerformanceStats
+    failure_analysis: FailureAnalysis
 
 
 # ============================================================

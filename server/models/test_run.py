@@ -71,7 +71,7 @@ class TestRunDetail(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     test_run_id = Column(Integer, ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
-    case_id = Column(Integer, ForeignKey("api_test_cases.id"), nullable=False)
+    case_id = Column(Integer, ForeignKey("api_test_cases.id", ondelete="SET NULL"), nullable=True)
     execution_order = Column(Integer, default=0)
 
     # 执行状态

@@ -28,6 +28,9 @@
       "Bash(python -c \"from schemas.api_test_case import APITestCaseCreate, APITestCaseUpdate, APITestCaseInDB; print\\('Schema OK'\\)\")",
       "Bash(python migrations/remove_history_table.py)",
       "Bash(python -c \"from api.api_test_cases import router; print\\('Backend OK'\\)\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\97996\\.claude\\plans"
     ]
   }
 }

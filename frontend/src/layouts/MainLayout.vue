@@ -96,7 +96,7 @@
             <a-menu-item key="api-test-manage">用例管理</a-menu-item>
             <a-menu-item key="api-record">录制用例</a-menu-item>
             <a-menu-item key="api-run">任务配置</a-menu-item>
-            <a-menu-item key="api-batch-tasks">执行任务</a-menu-item>
+            <a-menu-item key="api-batch-tasks">任务记录</a-menu-item>
           </a-sub-menu>
 
           <a-menu-item key="api-debug">

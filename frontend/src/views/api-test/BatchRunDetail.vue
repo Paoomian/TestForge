@@ -22,8 +22,7 @@
       <template v-if="taskInfo">
         <!-- 任务信息卡片 -->
         <a-card :bordered="false" style="margin-bottom: 16px">
-          <a-descriptions :column="4" title="任务信息">
-            <a-descriptions-item label="任务ID">{{ taskInfo.id }}</a-descriptions-item>
+          <a-descriptions :column="3">
             <a-descriptions-item label="任务名称">{{ taskInfo.name }}</a-descriptions-item>
             <a-descriptions-item label="状态">
               <a-tag :color="getStatusColor(taskInfo.status)">
@@ -34,29 +33,40 @@
               </a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="执行环境">
-              {{ taskInfo.environment_id ? `环境 #${taskInfo.environment_id}` : '未指定' }}
+              {{ taskInfo.environment_name || (taskInfo.environment_id ? `环境 #${taskInfo.environment_id}` : '未指定') }}
             </a-descriptions-item>
-            <a-descriptions-item label="并发数">{{ taskInfo.concurrency }}</a-descriptions-item>
+            <a-descriptions-item label="并发数">{{ taskInfo.concurrency === 1 ? '串行' : `${taskInfo.concurrency}并发` }}</a-descriptions-item>
             <a-descriptions-item label="失败策略">
               {{ taskInfo.failure_strategy === 'continue' ? '继续执行' : '遇错停止' }}
             </a-descriptions-item>
-            <a-descriptions-item label="耗时">
-              {{ taskInfo.duration ? formatDuration(taskInfo.duration) : '-' }}
-            </a-descriptions-item>
-            <a-descriptions-item label="创建时间">
-              {{ formatTime(taskInfo.created_at) }}
+            <a-descriptions-item v-if="taskInfo.duration" label="耗时">
+              {{ formatDuration(taskInfo.duration) }}
             </a-descriptions-item>
           </a-descriptions>
         </a-card>
 
-        <!-- 进度卡片 -->
-        <a-card :bordered="false" style="margin-bottom: 16px">
+        <!-- 进度卡片（执行中显示） -->
+        <a-card v-if="['pending', 'running'].includes(taskInfo.status)" :bordered="false" style="margin-bottom: 16px">
           <BatchRunProgress
             :total="taskInfo.total_count"
             :pass-count="taskInfo.pass_count"
             :fail-count="taskInfo.fail_count"
             :error-count="taskInfo.error_count"
             :status="taskInfo.status"
+          />
+        </a-card>
+
+        <!-- 测试报告（完成后显示） -->
+        <a-card
+          v-else
+          :bordered="false"
+          title="测试报告"
+          style="margin-bottom: 16px"
+        >
+          <TestReportPanel
+            :run-id="Number(taskId)"
+            :status="taskInfo.status"
+            @view-detail="handleViewDetail"
           />
         </a-card>
 
@@ -115,6 +125,7 @@ import { getBatchRun, cancelBatchRun } from '@/api/batchRun'
 import type { BatchRunInfo, CaseDetailSummary } from '@/api/batchRun'
 import BatchRunProgress from './components/BatchRunProgress.vue'
 import CaseResultDetail from './components/CaseResultDetail.vue'
+import TestReportPanel from './components/TestReportPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -177,10 +188,6 @@ const formatDuration = (ms: number) => {
   return `${min}m ${sec}s`
 }
 
-const formatTime = (time: string) => {
-  return new Date(time).toLocaleString('zh-CN')
-}
-
 const goBack = () => {
   router.push({ name: 'api-batch-tasks' })
 }
@@ -208,6 +215,11 @@ const handleCancel = async () => {
 
 const viewCaseDetail = (record: CaseDetailSummary) => {
   selectedDetailId.value = record.id
+  detailDrawerVisible.value = true
+}
+
+const handleViewDetail = (detailId: number) => {
+  selectedDetailId.value = detailId
   detailDrawerVisible.value = true
 }
 

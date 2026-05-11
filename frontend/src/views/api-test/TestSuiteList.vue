@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getTestSuites, deleteTestSuite, copyTestSuite, runTestSuite } from '@/api/testSuite'
 import type { TestSuiteListItem } from '@/api/testSuite'
 import TestSuiteDrawer from './components/TestSuiteDrawer.vue'
@@ -209,7 +209,20 @@ const handleRun = async (record: TestSuiteListItem) => {
     // 跳转到任务详情
     router.push({ name: 'api-batch-task-detail', params: { taskId: res.id } })
   } catch (e: any) {
-    Message.error(e?.message || '执行失败')
+    const errorMsg = e?.response?.data?.detail || e?.message || '执行失败'
+    if (errorMsg.includes('已被删除')) {
+      Modal.confirm({
+        title: '用例已删除',
+        content: `${errorMsg}，是否删除该任务配置？`,
+        okText: '删除任务',
+        cancelText: '取消',
+        onOk: async () => {
+          await handleDelete(record)
+        }
+      })
+    } else {
+      Message.error(errorMsg)
+    }
   }
 }
 
