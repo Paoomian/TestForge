@@ -227,6 +227,7 @@ watch(() => props.failureAnalysis, () => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  gap: 12px;
 }
 
 .category-name {
@@ -286,6 +287,7 @@ watch(() => props.failureAnalysis, () => {
   font-weight: 600;
   color: var(--color-danger-6);
   min-width: 60px;
+  margin-right: 8px;
 }
 
 .assertion-field {

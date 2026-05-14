@@ -186,6 +186,20 @@
           </div>
         </div>
 
+        <!-- 数据规则变量 -->
+        <div v-if="dataRuleVars.length" class="section">
+          <div class="section-title">数据规则变量</div>
+          <div class="var-list">
+            <div class="var-item" v-for="v in dataRuleVars" :key="v.name">
+              <span class="var-name">{{ v.name }}</span>
+              <span class="var-value">{{ v.value }}</span>
+              <a-button type="text" size="mini" @click="copyText(v.value)">
+                <template #icon><icon-copy /></template>
+              </a-button>
+            </div>
+          </div>
+        </div>
+
         <!-- 脚本输出 -->
         <div v-if="hasScriptOutput" class="section">
           <div class="section-title">脚本输出</div>
@@ -257,6 +271,11 @@ const assertionTypeMap: Record<string, string> = {
 const extractedVars = computed(() => {
   if (!result.value?.extracted_variables) return []
   return Object.entries(result.value.extracted_variables).map(([name, value]) => ({ name, value }))
+})
+
+const dataRuleVars = computed(() => {
+  if (!result.value?.data_rule_variables) return []
+  return Object.entries(result.value.data_rule_variables).map(([name, value]) => ({ name, value }))
 })
 
 const hasScriptOutput = computed(() => {
@@ -343,6 +362,7 @@ const handleRun = async () => {
       error_message: e.response?.data?.detail || e.message || '执行失败',
       assertions: [],
       extracted_variables: {},
+      data_rule_variables: {},
       script_output: {},
       duration_ms: 0
     }

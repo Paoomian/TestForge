@@ -12,14 +12,14 @@
         />
       </a-tab-pane>
 
-      <a-tab-pane key="extracts">
+      <a-tab-pane key="data-rules">
         <template #title>
-          变量提取
-          <a-badge v-if="extracts.length > 0" :count="extracts.length" :max="99" />
+          数据规则
+          <a-badge v-if="dataRules.length > 0" :count="dataRules.length" :max="99" />
         </template>
-        <ExtractEditor
-          :model-value="extracts"
-          @update:model-value="$emit('update:extracts', $event)"
+        <DataRuleEditor
+          :model-value="dataRules"
+          @update:model-value="$emit('update:dataRules', $event)"
         />
       </a-tab-pane>
     </a-tabs>
@@ -27,17 +27,17 @@
 </template>
 
 <script setup lang="ts">
-import type { AssertionItem, ExtractItem } from '@/api/apiTestCase'
+import type { AssertionItem, DataRuleItem } from '@/api/apiTestCase'
 import AssertionEditor from './AssertionEditor.vue'
-import ExtractEditor from './ExtractEditor.vue'
+import DataRuleEditor from './DataRuleEditor.vue'
 
 defineProps<{
   assertions: AssertionItem[]
-  extracts: ExtractItem[]
+  dataRules: DataRuleItem[]
 }>()
 
 defineEmits<{
   (e: 'update:assertions', value: AssertionItem[]): void
-  (e: 'update:extracts', value: ExtractItem[]): void
+  (e: 'update:dataRules', value: DataRuleItem[]): void
 }>()
 </script>

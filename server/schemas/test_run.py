@@ -31,6 +31,7 @@ class RunResult(BaseModel):
     response_info: Optional[dict] = None
     assertions: list[AssertionResult] = []
     extracted_variables: dict[str, str] = {}
+    data_rule_variables: dict[str, str] = {}
     script_output: dict = {}
     error_message: Optional[str] = None
     duration_ms: int = 0

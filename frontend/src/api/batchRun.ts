@@ -210,6 +210,14 @@ export const deleteBatchRun = (id: number) => {
   })
 }
 
+export const batchDeleteBatchRuns = (runIds: number[]) => {
+  return request({
+    url: '/batch-runs/batch-delete',
+    method: 'post',
+    data: { run_ids: runIds }
+  })
+}
+
 export const getBatchRunReport = (id: number) => {
   return request<BatchRunReport>({
     url: `/batch-runs/${id}/report`,

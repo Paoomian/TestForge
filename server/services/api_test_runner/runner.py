@@ -12,6 +12,7 @@ from .script_service import ScriptService
 from .http_service import HttpService
 from .assertion_service import AssertionService
 from .extract_service import ExtractService
+from .data_rule_service import DataRuleService
 
 
 class TestRunner:
@@ -24,6 +25,7 @@ class TestRunner:
         self.http_service = HttpService()
         self.assertion_service = AssertionService()
         self.extract_service = ExtractService()
+        self.data_rule_service = DataRuleService()
 
     async def run_case(
         self,
@@ -118,6 +120,13 @@ class TestRunner:
                 result.extracted_variables = extracted
                 variables.update(extracted)
 
+            # 8.5 数据规则执行
+            data_rules = self._load_data_rules(case)
+            if data_rules:
+                rule_results = self.data_rule_service.execute_rules(data_rules, variables, response_info)
+                result.data_rule_variables = rule_results
+                variables.update(rule_results)
+
             # 9. 断言执行
             assertions = self._load_assertions(case)
             if assertions:
@@ -162,6 +171,7 @@ class TestRunner:
             joinedload(APITestCase.body_raw),
             joinedload(APITestCase.assertions),
             joinedload(APITestCase.extracts),
+            joinedload(APITestCase.data_rules),
             joinedload(APITestCase.auth),
         ).filter(APITestCase.id == case_id).first()
 
@@ -258,4 +268,31 @@ class TestRunner:
                 "default_value": e.default_value,
             }
             for e in (case.extracts or [])
+        ]
+
+    def _load_data_rules(self, case: APITestCase) -> list[dict]:
+        """加载数据规则列表"""
+        return [
+            {
+                "name": r.name,
+                "rule_type": r.rule_type,
+                "enabled": r.enabled,
+                "description": r.description,
+                "default_value": r.default_value,
+                "sort_order": r.sort_order,
+                "source": r.source,
+                "expression": r.expression,
+                "static_value": r.static_value,
+                "generator": r.generator,
+                "generator_params": r.generator_params,
+                "source_variable": r.source_variable,
+                "transform_type": r.transform_type,
+                "transform_params": r.transform_params,
+                "condition_variable": r.condition_variable,
+                "condition_operator": r.condition_operator,
+                "condition_value": r.condition_value,
+                "true_value": r.true_value,
+                "false_value": r.false_value,
+            }
+            for r in (case.data_rules or [])
         ]

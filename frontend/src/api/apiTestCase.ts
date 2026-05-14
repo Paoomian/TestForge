@@ -49,6 +49,33 @@ export interface ExtractItem {
   sort_order?: number
 }
 
+export interface DataRuleItem {
+  name: string
+  rule_type: 'extract' | 'static' | 'generate' | 'transform' | 'conditional'
+  enabled?: boolean
+  description?: string
+  default_value?: string
+  sort_order?: number
+  // extract 类型专用
+  source?: 'jsonpath' | 'regex' | 'header'
+  expression?: string
+  // static 类型专用
+  static_value?: string
+  // generate 类型专用
+  generator?: 'timestamp' | 'uuid' | 'random_int' | 'random_string' | 'now'
+  generator_params?: Record<string, any>
+  // transform 类型专用
+  source_variable?: string
+  transform_type?: 'substring' | 'concat' | 'replace' | 'upper' | 'lower' | 'trim' | 'to_int' | 'to_string' | 'format_date'
+  transform_params?: Record<string, any>
+  // conditional 类型专用
+  condition_variable?: string
+  condition_operator?: 'equals' | 'not_equals' | 'contains' | 'is_empty' | 'is_not_empty' | 'greater_than' | 'less_than'
+  condition_value?: string
+  true_value?: string
+  false_value?: string
+}
+
 export interface AuthConfig {
   auth_type: 'none' | 'bearer' | 'basic' | 'api_key'
   token?: string
@@ -89,6 +116,7 @@ export interface APITestCase {
   body_raw?: BodyRawItem
   assertions: AssertionItem[]
   extracts: ExtractItem[]
+  data_rules: DataRuleItem[]
   auth?: AuthConfig
 }
 
@@ -114,6 +142,7 @@ export interface APITestCaseCreate {
   body_raw?: BodyRawItem
   assertions?: AssertionItem[]
   extracts?: ExtractItem[]
+  data_rules?: DataRuleItem[]
   auth?: AuthConfig
 }
 
@@ -138,6 +167,7 @@ export interface APITestCaseUpdate {
   body_raw?: BodyRawItem
   assertions?: AssertionItem[]
   extracts?: ExtractItem[]
+  data_rules?: DataRuleItem[]
   auth?: AuthConfig
 }
 
@@ -341,6 +371,7 @@ export interface RunResult {
   }
   assertions: AssertionRunResult[]
   extracted_variables: Record<string, string>
+  data_rule_variables: Record<string, string>
   script_output: Record<string, any>
   error_message?: string
   duration_ms: number

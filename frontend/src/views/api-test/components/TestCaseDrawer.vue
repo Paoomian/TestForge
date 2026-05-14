@@ -47,9 +47,9 @@
       <a-tab-pane key="assertion-extract" title="断言与提取">
         <AssertionExtractTab
           :assertions="formData.assertions"
-          :extracts="formData.extracts"
+          :data-rules="formData.data_rules"
           @update:assertions="formData.assertions = $event"
-          @update:extracts="formData.extracts = $event"
+          @update:data-rules="formData.data_rules = $event"
         />
       </a-tab-pane>
 
@@ -140,6 +140,7 @@ import type {
   BodyFormItem,
   AssertionItem,
   ExtractItem,
+  DataRuleItem,
   AuthConfig,
 } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
@@ -203,6 +204,7 @@ const formData = reactive({
   body_form: [] as BodyFormItem[],
   assertions: [] as AssertionItem[],
   extracts: [] as ExtractItem[],
+  data_rules: [] as DataRuleItem[],
   auth: { auth_type: 'none' } as AuthConfig,
 })
 
@@ -283,6 +285,7 @@ const loadEditData = async (data: APITestCase) => {
   formData.body_form = (fullData.body_form || []).map(f => ({ ...f }))
   formData.assertions = (fullData.assertions || []).map(a => ({ ...a }))
   formData.extracts = (fullData.extracts || []).map(e => ({ ...e }))
+  formData.data_rules = (fullData.data_rules || []).map(r => ({ ...r }))
   formData.auth = fullData.auth ? { ...fullData.auth } : { auth_type: 'none' }
 
   rawContent.value = fullData.body_raw?.content || ''
@@ -311,6 +314,7 @@ const resetForm = () => {
   formData.body_form = []
   formData.assertions = []
   formData.extracts = []
+  formData.data_rules = []
   formData.auth = { auth_type: 'none' }
   rawContent.value = ''
   activeTab.value = 'basic'
@@ -373,6 +377,7 @@ const handleSubmit = async (saveStatus?: string) => {
         body_raw: bodyRaw,
         assertions: formData.assertions,
         extracts: formData.extracts,
+        data_rules: formData.data_rules,
         auth: formData.auth,
       }
       await updateTestCase(formData.id, updateData)
@@ -400,6 +405,7 @@ const handleSubmit = async (saveStatus?: string) => {
         body_raw: bodyRaw,
         assertions: formData.assertions,
         extracts: formData.extracts,
+        data_rules: formData.data_rules,
         auth: formData.auth,
       }
       await createTestCase(createData)

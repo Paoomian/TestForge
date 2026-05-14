@@ -14,6 +14,7 @@ from .test_case_body import TestCaseBodyForm, TestCaseBodyRaw
 from .test_case_assertion import TestCaseAssertion
 from .test_case_extract import TestCaseExtract
 from .test_case_auth import TestCaseAuth
+from .test_case_data_rule import TestCaseDataRule
 
 __all__ = [
     "User",
@@ -37,4 +38,5 @@ __all__ = [
     "TestCaseAssertion",
     "TestCaseExtract",
     "TestCaseAuth",
+    "TestCaseDataRule",
 ]

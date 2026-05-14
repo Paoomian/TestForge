@@ -25,7 +25,7 @@
           <a-descriptions :column="3">
             <a-descriptions-item label="任务名称">{{ taskInfo.name }}</a-descriptions-item>
             <a-descriptions-item label="状态">
-              <a-tag :color="getStatusColor(taskInfo.status)">
+              <a-tag :color="getStatusColor(taskInfo.status)" class="status-tag">
                 <template #icon>
                   <icon-loading v-if="taskInfo.status === 'running'" spin />
                 </template>
@@ -259,6 +259,16 @@ onUnmounted(() => {
 <style scoped>
 .batch-run-detail {
   padding: 0;
+}
+
+.status-tag {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-tag :deep(.arco-tag-icon:empty) {
+  display: none;
 }
 
 .detail-header {

@@ -145,8 +145,8 @@
 - [x] 数据库迁移脚本 (migrations/add_batch_run_fields.py)
 
 ### 前端
-- [x] batchRun.ts API层（创建/列表/详情/取消/删除）
-- [x] BatchRunTaskList.vue 任务列表页
+- [x] batchRun.ts API层（创建/列表/详情/取消/删除/批量删除）
+- [x] BatchRunTaskList.vue 任务列表页（按日期分组显示 + 批量删除）
 - [x] BatchRunDetail.vue 任务详情页（1.5s轮询实时更新）
 - [x] BatchRunProgress.vue 进度条组件
 - [x] CaseResultDetail.vue 用例执行详情抽屉
@@ -158,6 +158,8 @@
 - 变量隔离：每条用例获取只读快照，提取变量串行合并回主上下文
 - MySQL ENUM改VARCHAR(20)避免截断问题
 - datetime使用naive模式避免timezone偏移错误
+- 任务列表按日期分组（今天/昨天/前天/3天前/4-7天前/更早），使用a-collapse嵌套a-table实现
+- 批量删除API：POST /batch-runs/batch-delete，自动过滤运行中的任务
 
 ## 任务配置功能（测试套件）
 
@@ -199,6 +201,33 @@
 - 失败分类基于 error_message 关键词匹配
 - 报告仅在任务完成后显示（done/error/cancelled）
 
+## 可视化数据传递功能 (2026-05-12)
+
+### 后端
+- [x] 新增 TestCaseDataRule 模型 (models/test_case_data_rule.py)
+- [x] 新增 DataRuleService 执行引擎 (services/api_test_runner/data_rule_service.py)
+- [x] 数据库迁移脚本 (migrations/add_data_rules.py)
+- [x] Schema 新增 DataRuleItem + 主表 Schema 新增 data_rules 字段
+- [x] API CRUD 支持 data_rules（创建/更新/删除/复制/列表序列化）
+- [x] runner.py 集成数据规则执行（变量提取之后、断言之前）
+- [x] RunResult 新增 data_rule_variables 字段
+- [x] batch_runner.py 合并数据规则变量到共享变量
+
+### 前端
+- [x] apiTestCase.ts 新增 DataRuleItem 接口 + RunResult 新增 data_rule_variables
+- [x] 创建 DataRuleCard.vue（单条规则卡片，根据 rule_type 动态切换表单）
+- [x] 创建 DataRuleEditor.vue（规则列表编辑器，本地副本 + emitChange 模式）
+- [x] 修改 AssertionExtractTab.vue（新增第三个 Tab "数据规则"）
+- [x] 修改 TestCaseDrawer.vue（formData 新增 data_rules，数据流打通）
+- [x] 修改 DebugResultPanel.vue（展示数据规则变量）
+
+### 技术决策
+- 新建独立子表 test_case_data_rules，不复用 ExtractEditor 结构
+- 数据规则在变量提取之后执行，transform 类型可对提取的变量做二次处理
+- 5种规则类型：extract/static/generate/transform/conditional
+- 规则按 sort_order 顺序执行，前面规则的输出可供后续规则引用
+- 批量执行中数据规则变量合并到 extracted_vars 中传递给后续用例
+
 ## Bug修复与优化 (2026-05-11)
 
 - [x] 修复任务详情环境显示问题（显示环境名称而非ID）
@@ -207,6 +236,140 @@
 - [x] 导航名称优化："执行任务" → "任务记录"
 - [x] 任务详情页优化：精简任务信息卡片，执行中显示进度/完成后显示报告
 
+## Bug修复与优化 (2026-05-14)
+
+- [x] 修复数据规则输入框无法输入（Arco Design a-input 的 @change 改为 @input）
+- [x] 移除"变量提取"Tab（数据规则 extract 类型完全覆盖，后端共用 ExtractService）
+- [x] 修复批量执行跨用例变量传递失败（asyncio.gather 后 ORM 对象 session 过期，改用 result 对象判断状态）
+- [x] 批量执行用例支持拖拽排序（HTML5 原生拖拽，零依赖）
+
 ---
 
-**最后更新**: 2026-05-11
+## 待开发功能规划
+
+> 基于测试开发工程师视角的功能评估，按优先级排列
+
+### P0 - 核心能力补齐
+
+#### ~~1. 可视化数据传递（解决脚本门槛）~~ ✅ 已完成
+
+**问题**：前置/后置脚本需要手写JavaScript，非开发人员无法使用接口关联功能
+
+**方案**：新增"数据规则"模块，支持5种规则类型（从响应提取/设置静态值/生成数据/数据变换/条件赋值），通过表单配置完成变量提取和传递
+
+- [x] 后端：TestCaseDataRule 模型 + 迁移脚本
+- [x] 后端：DataRuleService 执行引擎（集成到 runner.py）
+- [x] 后端：Schema + API CRUD 支持
+- [x] 前端：DataRuleCard.vue + DataRuleEditor.vue 可视化配置组件
+- [x] 前端：集成到 AssertionExtractTab.vue 作为第三个 Tab
+- [x] 前端：调试结果面板展示数据规则变量
+- [x] 批量执行中数据规则变量传递
+
+**预估工作量**：中
+
+#### 2. Swagger/OpenAPI 批量导入
+
+**问题**：只能逐条手动创建或cURL导入，新项目接入成本极高
+
+**方案**：支持导入Swagger JSON/YAML，自动解析为用例列表
+
+- [ ] 后端：Swagger解析服务（解析paths/definitions/parameters）
+- [ ] 后端：POST /api-test-cases/import-swagger 接口
+- [ ] 前端：Swagger导入弹窗（URL输入/文件上传、模块映射、预览确认）
+- [ ] 前端：批量导入进度和结果展示
+
+**预估工作量**：中
+
+### P1 - 接口自动化核心能力
+
+#### 3. 数据驱动 / 参数化执行
+
+**问题**：同一用例无法用不同数据集批量执行，只能复制多份用例
+
+**方案**：支持CSV/Excel数据集，用例中用 `{{column_name}}` 引用
+
+- [ ] 后端：数据集模型（data_sets表，存储文件路径/列定义/行数）
+- [ ] 后端：数据集CRUD API
+- [ ] 后端：批量执行引擎改造（用例数 × 数据行数展开）
+- [ ] 后端：执行明细关联数据行索引
+- [ ] 前端：数据集管理页面/弹窗
+- [ ] 前端：批量执行配置中选择数据集
+- [ ] 前端：报告按数据行维度展示
+
+**预估工作量**：大
+
+#### 4. 用例场景编排
+
+**问题**：测试套件只是用例列表，无法实现条件分支、等待、循环等流程控制
+
+**方案**：在套件中支持编排节点类型
+
+- [ ] 后端：编排节点模型（scene_nodes表，支持接口调用/条件判断/等待/数据赋值）
+- [ ] 后端：场景执行引擎（按节点类型分发执行）
+- [ ] 前端：场景编排器组件（拖拽式或表单式）
+- [ ] 前端：集成到TestSuiteDrawer.vue
+
+**预估工作量**：大
+
+### P2 - 体验与产出增强
+
+#### 5. 测试报告增强
+
+- [ ] 报告导出（PDF/HTML格式）
+- [ ] 历史趋势对比（通过率/响应时间变化曲线）
+- [ ] 报告分享链接（带Token的临时访问URL）
+- [ ] 接口覆盖率统计
+
+**预估工作量**：中
+
+#### 6. 环境变量增强
+
+- [ ] 敏感变量加密存储（前端遮蔽显示）
+- [ ] 变量描述字段和类型标记（string/number/secret）
+- [ ] 全局变量（跨项目共享，当前代码有预留未实现）
+
+**预估工作量**：小
+
+#### 7. 断言能力增强
+
+- [ ] JSON Schema 校验断言
+- [ ] 断言失败时 expected vs actual 对比展示优化
+
+**预估工作量**：小
+
+### P3 - 体验优化
+
+#### 8. 调试体验优化
+
+- [ ] 请求历史记录（最近N次调试结果回看）
+- [ ] 响应对比功能（两次执行结果diff）
+- [ ] cURL导入入口在调试台更显眼位置
+
+**预估工作量**：小
+
+#### 9. 用例维护辅助
+
+- [ ] 标签筛选完善（前端筛选组件对接tags字段）
+- [ ] 用例有效性检查（接口URL变更影响分析）
+- [ ] 用例执行频率统计（最近执行时间、失败率排行）
+
+**预估工作量**：小
+
+#### 10. Postman Collection 导入
+
+- [ ] 支持导入Postman Collection v2.1 JSON格式
+- [ ] 自动转换请求、变量、认证配置
+
+**预估工作量**：中
+
+---
+
+### 技术决策
+
+- Arco Design a-input 的 `@change` 事件只在失焦时触发，需用 `@input` 实现实时输入
+- asyncio.gather 返回后 SQLAlchemy ORM 对象可能被 session 过期，跨 await 边界应使用值对象而非 ORM 属性
+- 变量提取 Tab 与数据规则 extract 类型功能重复，统一使用数据规则作为变量管理入口
+- 批量执行拖拽排序使用 HTML5 原生 drag-and-drop API，零依赖实现
+- 任务列表日期分组使用 a-collapse + a-table 组合，支持分组全选和批量删除
+
+**最后更新**: 2026-05-15

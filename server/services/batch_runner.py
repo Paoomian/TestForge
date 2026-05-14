@@ -80,19 +80,19 @@ class BatchRunner:
                     tasks.append(self._run_single_case(detail, variables_snapshot))
 
                 # 等待当前批次完成
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # 合并提取的变量（串行，避免竞态）
-                for detail, result in zip(batch, results):
-                    if isinstance(result, Exception):
+                for detail, batch_result in zip(batch, batch_results):
+                    if isinstance(batch_result, Exception):
                         continue
-                    if detail.status == TestRunDetailStatus.PASS.value and detail.extracted_vars:
-                        shared_variables.update(detail.extracted_vars)
+                    result, extracted_vars = batch_result
+                    # 用 result.status 判断（不依赖 ORM 对象状态）
+                    if result.status == "pass" and extracted_vars:
+                        shared_variables.update(extracted_vars)
 
                     # 失败策略：如果设置了 stop，遇到失败则停止
-                    if failure_strategy == "stop" and detail.status in (
-                        TestRunDetailStatus.FAIL.value, TestRunDetailStatus.ERROR.value
-                    ):
+                    if failure_strategy == "stop" and result.status in ("fail", "error"):
                         # 将剩余用例标记为 skipped
                         remaining_details = details[batch_start + concurrency:]
                         for d in remaining_details:
@@ -151,7 +151,7 @@ class BatchRunner:
                 await self.redis.close()
 
     async def _run_single_case(self, detail: TestRunDetail, variables: dict):
-        """执行单个用例"""
+        """执行单个用例，返回 (RunResult, extracted_vars) 元组"""
         # 更新状态为运行中
         detail.status = TestRunDetailStatus.RUNNING.value
         detail.started_at = _now()
@@ -177,12 +177,17 @@ class BatchRunner:
             temp_variables=variables,
         )
 
+        # 合并提取变量和数据规则变量
+        merged_vars = {}
+        merged_vars.update(result.extracted_variables)
+        merged_vars.update(result.data_rule_variables)
+
         # 保存执行结果
         detail.status = result.status
         detail.request_snapshot = result.request_snapshot
         detail.response_info = result.response_info
         detail.assertions = [a.model_dump() for a in result.assertions]
-        detail.extracted_vars = result.extracted_variables
+        detail.extracted_vars = merged_vars
         detail.script_output = result.script_output
         detail.error_message = result.error_message
         detail.duration_ms = result.duration_ms
@@ -195,11 +200,12 @@ class BatchRunner:
             "detail_id": detail.id,
             "case_name": case_name,
             "order": detail.execution_order,
-            "status": detail.status.value,
+            "status": result.status,
             "duration_ms": detail.duration_ms,
         })
 
-        return result
+        # 返回结果和提取的变量（避免依赖 ORM 对象状态）
+        return result, merged_vars
 
     def _load_env_vars(self, environment_id: int) -> dict:
         """加载环境变量"""

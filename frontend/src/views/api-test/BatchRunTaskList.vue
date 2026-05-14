@@ -23,105 +23,150 @@
           <template #icon><icon-refresh /></template>
           重置
         </a-button>
+        <a-button
+          v-if="selectedKeys.size > 0"
+          type="primary"
+          status="danger"
+          @click="handleBatchDelete"
+        >
+          <template #icon><icon-delete /></template>
+          批量删除 ({{ selectedKeys.size }})
+        </a-button>
       </a-space>
     </a-card>
 
-    <!-- 表格 -->
+    <!-- 任务列表（按日期分组） -->
     <a-card :bordered="false">
-      <a-table
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        @page-change="handlePageChange"
-      >
-        <template #status="{ record }">
-          <a-tag :color="getStatusColor(record.status)">
-            <template #icon>
-              <icon-loading v-if="record.status === 'running'" spin />
+      <a-spin :loading="loading">
+        <a-empty v-if="!loading && groupedData.length === 0" description="暂无任务记录" />
+
+        <a-collapse
+          v-else
+          v-model:active-key="activeKeys"
+          :bordered="false"
+          expand-icon-position="left"
+        >
+          <a-collapse-item
+            v-for="group in groupedData"
+            :key="group.key"
+            :disabled="group.items.length === 0"
+          >
+            <template #header>
+              <div class="group-header">
+                <span class="group-label">{{ group.label }}</span>
+                <a-tag size="small" color="arcoblue">{{ group.items.length }} 条</a-tag>
+                <a-checkbox
+                  v-if="group.items.length > 0"
+                  :model-value="isGroupSelected(group.key)"
+                  :indeterminate="isGroupIndeterminate(group.key)"
+                  @click.stop
+                  @change="(checked: boolean) => toggleGroupSelection(group.key, checked)"
+                >
+                  全选
+                </a-checkbox>
+              </div>
             </template>
-            {{ getStatusText(record.status) }}
-          </a-tag>
-        </template>
 
-        <template #progress="{ record }">
-          <a-progress
-            :percent="record.progress / 100"
-            :status="getProgressStatus(record)"
-            size="small"
-            :show-text="false"
-            style="width: 120px"
-          />
-          <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3)">
-            {{ record.progress.toFixed(0) }}%
-          </span>
-        </template>
-
-        <template #stats="{ record }">
-          <a-space>
-            <span class="stat-pass">{{ record.pass_count }}</span>
-            <span class="stat-fail">{{ record.fail_count }}</span>
-            <span class="stat-error">{{ record.error_count }}</span>
-          </a-space>
-        </template>
-
-        <template #duration="{ record }">
-          {{ record.duration ? formatDuration(record.duration) : '-' }}
-        </template>
-
-        <template #created_at="{ record }">
-          {{ formatTime(record.created_at) }}
-        </template>
-
-        <template #actions="{ record }">
-          <a-space>
-            <a-button type="text" size="small" @click="handleViewDetail(record)">
-              详情
-            </a-button>
-            <a-button
-              v-if="record.status === 'running' || record.status === 'pending'"
-              type="text"
+            <a-table
+              v-if="group.items.length > 0"
+              :columns="columns"
+              :data="group.items"
+              :pagination="false"
+              :row-key="(record: BatchRunListItem) => record.id"
+              :row-selection="getRowSelection(group.key)"
               size="small"
-              status="warning"
-              @click="handleCancel(record)"
+              @selection-change="(keys: any) => handleSelectionChange(group.key, keys)"
             >
-              取消
-            </a-button>
-            <a-popconfirm
-              v-if="record.status !== 'running'"
-              content="确定要删除该任务吗？"
-              @ok="handleDelete(record)"
-            >
-              <a-button type="text" size="small" status="danger">
-                删除
-              </a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-      </a-table>
+              <template #status="{ record }">
+                <a-tag :color="getStatusColor(record.status)" class="status-tag">
+                  <template #icon>
+                    <icon-loading v-if="record.status === 'running'" spin />
+                  </template>
+                  {{ getStatusText(record.status) }}
+                </a-tag>
+              </template>
+
+              <template #progress="{ record }">
+                <a-progress
+                  :percent="record.progress / 100"
+                  :status="getProgressStatus(record)"
+                  size="small"
+                  :show-text="false"
+                  style="width: 120px"
+                />
+                <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3)">
+                  {{ record.progress.toFixed(0) }}%
+                </span>
+              </template>
+
+              <template #stats="{ record }">
+                <a-space>
+                  <span class="stat-pass">{{ record.pass_count }}</span>
+                  <span class="stat-fail">{{ record.fail_count }}</span>
+                  <span class="stat-error">{{ record.error_count }}</span>
+                </a-space>
+              </template>
+
+              <template #duration="{ record }">
+                {{ record.duration ? formatDuration(record.duration) : '-' }}
+              </template>
+
+              <template #created_at="{ record }">
+                {{ formatTime(record.created_at) }}
+              </template>
+
+              <template #actions="{ record }">
+                <a-space>
+                  <a-button type="text" size="small" @click="handleViewDetail(record)">
+                    详情
+                  </a-button>
+                  <a-button
+                    v-if="record.status === 'running' || record.status === 'pending'"
+                    type="text"
+                    size="small"
+                    status="warning"
+                    @click="handleCancel(record)"
+                  >
+                    取消
+                  </a-button>
+                  <a-popconfirm
+                    v-if="record.status !== 'running'"
+                    content="确定要删除该任务吗？"
+                    @ok="handleDelete(record)"
+                  >
+                    <a-button type="text" size="small" status="danger">
+                      删除
+                    </a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+            </a-table>
+          </a-collapse-item>
+        </a-collapse>
+      </a-spin>
     </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
-import { getBatchRuns, cancelBatchRun, deleteBatchRun } from '@/api/batchRun'
+import { Message, Modal } from '@arco-design/web-vue'
+import { getBatchRuns, cancelBatchRun, deleteBatchRun, batchDeleteBatchRuns } from '@/api/batchRun'
 import type { BatchRunListItem } from '@/api/batchRun'
 
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref<BatchRunListItem[]>([])
 
+// 选中的任务 ID
+const selectedKeys = ref<Set<number>>(new Set())
+
+// 展开的分组
+const activeKeys = ref<string[]>(['today', 'yesterday', 'before_yesterday'])
+
 const searchForm = reactive({
   status: ''
-})
-
-const pagination = reactive({
-  current: 1,
-  pageSize: 20,
-  total: 0
 })
 
 const columns = [
@@ -134,6 +179,128 @@ const columns = [
   { title: '创建时间', slotName: 'created_at', width: 160 },
   { title: '操作', slotName: 'actions', width: 180, fixed: 'right' as const }
 ]
+
+// 日期分组定义
+interface DateGroup {
+  key: string
+  label: string
+  daysAgo: [number, number] // [min, max] 天数范围
+}
+
+const dateGroups: DateGroup[] = [
+  { key: 'today', label: '今天', daysAgo: [0, 0] },
+  { key: 'yesterday', label: '昨天', daysAgo: [1, 1] },
+  { key: 'before_yesterday', label: '前天', daysAgo: [2, 2] },
+  { key: '3_days_ago', label: '3天前', daysAgo: [3, 3] },
+  { key: '7_days_ago', label: '4-7天前', daysAgo: [4, 7] },
+  { key: 'older', label: '更早', daysAgo: [8, 999] }
+]
+
+// 计算日期分组
+const groupedData = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const groups = dateGroups.map(group => ({
+    ...group,
+    items: [] as BatchRunListItem[]
+  }))
+
+  tableData.value.forEach(item => {
+    const createdDate = new Date(item.created_at)
+    createdDate.setHours(0, 0, 0, 0)
+
+    const diffTime = today.getTime() - createdDate.getTime()
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+    const group = groups.find(g => diffDays >= g.daysAgo[0] && diffDays <= g.daysAgo[1])
+    if (group) {
+      group.items.push(item)
+    } else {
+      // 放入"更早"分组
+      groups[groups.length - 1].items.push(item)
+    }
+  })
+
+  // 只返回有数据的分组
+  return groups.filter(g => g.items.length > 0)
+})
+
+// 判断分组是否全选
+const isGroupSelected = (groupKey: string) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group || group.items.length === 0) return false
+  return group.items.every(item => selectedKeys.value.has(item.id))
+}
+
+// 判断分组是否部分选中
+const isGroupIndeterminate = (groupKey: string) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group || group.items.length === 0) return false
+  const selectedCount = group.items.filter(item => selectedKeys.value.has(item.id)).length
+  return selectedCount > 0 && selectedCount < group.items.length
+}
+
+// 全选/取消全选某组
+const toggleGroupSelection = (groupKey: string, checked: boolean) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group) return
+
+  if (checked) {
+    group.items.forEach(item => selectedKeys.value.add(item.id))
+  } else {
+    group.items.forEach(item => selectedKeys.value.delete(item.id))
+  }
+}
+
+// 处理表格行选择变化
+const handleSelectionChange = (groupKey: string, keys: number[]) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group) return
+
+  // 清除该组之前的选择
+  group.items.forEach(item => selectedKeys.value.delete(item.id))
+  // 添加新选择
+  keys.forEach(key => selectedKeys.value.add(key))
+}
+
+// 获取表格行选择配置
+const getRowSelection = (groupKey: string) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group) return undefined
+
+  return {
+    type: 'checkbox' as const,
+    selectedRowKeys: group.items
+      .filter(item => selectedKeys.value.has(item.id))
+      .map(item => item.id),
+    showCheckedAll: false
+  }
+}
+
+// 批量删除
+const handleBatchDelete = async () => {
+  const ids = Array.from(selectedKeys.value)
+  if (ids.length === 0) return
+
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除选中的 ${ids.length} 条任务记录吗？`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      try {
+        await batchDeleteBatchRuns(ids)
+        Message.success(`成功删除 ${ids.length} 条记录`)
+        selectedKeys.value.clear()
+        loadData()
+      } catch (e: any) {
+        Message.error(e?.message || '批量删除失败')
+      }
+    }
+  })
+}
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
@@ -182,12 +349,11 @@ const loadData = async () => {
   loading.value = true
   try {
     const res = await getBatchRuns({
-      page: pagination.current,
-      page_size: pagination.pageSize,
+      page: 1,
+      page_size: 100, // 增大每页数量以支持分组
       status: searchForm.status || undefined
     })
     tableData.value = res.items
-    pagination.total = res.total
   } catch (e) {
     Message.error('加载任务列表失败')
   } finally {
@@ -196,18 +362,13 @@ const loadData = async () => {
 }
 
 const handleSearch = () => {
-  pagination.current = 1
+  selectedKeys.value.clear()
   loadData()
 }
 
 const handleReset = () => {
   searchForm.status = ''
   handleSearch()
-}
-
-const handlePageChange = (page: number) => {
-  pagination.current = page
-  loadData()
 }
 
 const handleViewDetail = (record: BatchRunListItem) => {
@@ -242,6 +403,28 @@ onMounted(() => {
 <style scoped>
 .batch-run-task-list {
   height: 100%;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.group-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.status-tag {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-tag :deep(.arco-tag-icon:empty) {
+  display: none;
 }
 
 .stat-pass {

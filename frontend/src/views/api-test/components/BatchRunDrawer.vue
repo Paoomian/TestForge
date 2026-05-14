@@ -10,10 +10,23 @@
       <!-- 已选用例 -->
       <a-form-item label="已选用例">
         <div class="case-summary">
-          <a-tag color="arcoblue">{{ cases.length }} 个用例</a-tag>
+          <a-tag color="arcoblue">{{ sortedCases.length }} 个用例</a-tag>
+          <span class="drag-hint">拖拽调整执行顺序</span>
         </div>
         <div class="case-list">
-          <div v-for="(item, index) in cases" :key="item.id" class="case-item">
+          <div
+            v-for="(item, index) in sortedCases"
+            :key="item.id"
+            class="case-item"
+            :class="{ 'drag-over': dragOverIndex === index, 'dragging': dragIndex === index }"
+            draggable="true"
+            @dragstart="onDragStart(index, $event)"
+            @dragover.prevent="onDragOver(index)"
+            @dragleave="onDragLeave"
+            @drop="onDrop(index)"
+            @dragend="onDragEnd"
+          >
+            <icon-drag-dot-vertical class="drag-handle" />
             <span class="case-order">{{ index + 1 }}</span>
             <span class="case-name">{{ item.case_number || item.name }}</span>
             <a-tag size="small" :color="getMethodColor(item.method)">{{ item.method }}</a-tag>
@@ -125,6 +138,48 @@ const emit = defineEmits<{
   (e: 'success', runId: number): void
 }>()
 
+// 拖拽排序状态
+const sortedCases = ref<APITestCase[]>([])
+const dragIndex = ref(-1)
+const dragOverIndex = ref(-1)
+
+// 监听 cases 变化，同步到本地排序列表
+watch(() => props.cases, (val) => {
+  sortedCases.value = [...val]
+}, { immediate: true })
+
+const onDragStart = (index: number, e: DragEvent) => {
+  dragIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+const onDragOver = (index: number) => {
+  if (dragIndex.value !== index) {
+    dragOverIndex.value = index
+  }
+}
+
+const onDragLeave = () => {
+  dragOverIndex.value = -1
+}
+
+const onDrop = (index: number) => {
+  if (dragIndex.value === -1 || dragIndex.value === index) return
+  const list = [...sortedCases.value]
+  const [moved] = list.splice(dragIndex.value, 1)
+  list.splice(index, 0, moved)
+  sortedCases.value = list
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+}
+
+const onDragEnd = () => {
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+}
+
 const loading = ref(false)
 const envLoading = ref(false)
 const environments = ref<Environment[]>([])
@@ -171,7 +226,7 @@ const getMethodColor = (method: string) => {
 }
 
 const handleSubmit = async () => {
-  if (props.cases.length === 0) {
+  if (sortedCases.value.length === 0) {
     Message.warning('请选择要执行的用例')
     return
   }
@@ -187,7 +242,7 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     const result = await createBatchRun({
-      case_ids: props.cases.map(c => c.id),
+      case_ids: sortedCases.value.map(c => c.id),
       environment_id: form.environment_id,
       concurrency: form.concurrency,
       failure_strategy: form.failure_strategy,
@@ -207,6 +262,14 @@ const handleSubmit = async () => {
 <style scoped>
 .case-summary {
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drag-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 
 .case-list {
@@ -214,7 +277,7 @@ const handleSubmit = async () => {
   overflow-y: auto;
   border: 1px solid var(--color-border-2);
   border-radius: var(--radius-small);
-  padding: 8px;
+  padding: 4px;
 }
 
 .case-item {
@@ -223,10 +286,28 @@ const handleSubmit = async () => {
   gap: 8px;
   padding: 6px 8px;
   border-radius: var(--radius-small);
+  cursor: grab;
+  transition: background 0.15s, box-shadow 0.15s;
 
   &:hover {
     background: var(--color-fill-1);
   }
+
+  &.dragging {
+    opacity: 0.4;
+    background: var(--color-fill-2);
+  }
+
+  &.drag-over {
+    background: var(--color-primary-light-1);
+    box-shadow: 0 -2px 0 0 var(--color-primary-6);
+  }
+}
+
+.drag-handle {
+  color: var(--color-text-3);
+  cursor: grab;
+  flex-shrink: 0;
 }
 
 .case-order {

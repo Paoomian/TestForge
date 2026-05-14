@@ -51,3 +51,4 @@ class APITestCase(Base):
     assertions = relationship("TestCaseAssertion", cascade="all, delete-orphan", order_by="TestCaseAssertion.sort_order")
     extracts = relationship("TestCaseExtract", cascade="all, delete-orphan", order_by="TestCaseExtract.sort_order")
     auth = relationship("TestCaseAuth", uselist=False, cascade="all, delete-orphan")
+    data_rules = relationship("TestCaseDataRule", cascade="all, delete-orphan", order_by="TestCaseDataRule.sort_order")

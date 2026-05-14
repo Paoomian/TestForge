@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, APITestCase, Environment
@@ -10,6 +12,10 @@ from schemas.test_run import (
 from core.deps import get_current_user, check_permission
 
 router = APIRouter()
+
+
+class BatchDeleteRequest(BaseModel):
+    run_ids: List[int]
 
 
 @router.post("", response_model=BatchRunInfo)
@@ -227,6 +233,37 @@ async def delete_batch_run(
     db.commit()
 
     return {"message": "删除成功"}
+
+
+@router.post("/batch-delete")
+async def batch_delete_runs(
+    req: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:execute")),
+):
+    """批量删除任务"""
+    if not req.run_ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的任务")
+
+    # 查询所有要删除的任务
+    runs = db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).all()
+    if len(runs) != len(req.run_ids):
+        found_ids = {r.id for r in runs}
+        missing = [rid for rid in req.run_ids if rid not in found_ids]
+        raise HTTPException(status_code=404, detail=f"任务不存在: {missing}")
+
+    # 过滤掉运行中的任务
+    running = [r for r in runs if r.status == TestRunStatus.RUNNING]
+    if running:
+        raise HTTPException(status_code=400, detail=f"无法删除运行中的任务: {[r.id for r in running]}")
+
+    # 删除关联的详情记录
+    db.query(TestRunDetail).filter(TestRunDetail.test_run_id.in_(req.run_ids)).delete()
+    # 删除任务
+    db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).delete()
+    db.commit()
+
+    return {"message": f"成功删除 {len(req.run_ids)} 条记录", "deleted": len(req.run_ids)}
 
 
 def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
