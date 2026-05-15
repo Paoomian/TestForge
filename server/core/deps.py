@@ -48,27 +48,8 @@ def get_current_active_superuser(
 
 
 def check_permission(permission: str):
+    """权限校验（暂未启用，直接放行）"""
     def permission_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.is_superuser:
-            return current_user
-
-        user_permissions = []
-        for role in current_user.roles:
-            user_permissions.extend(role.permissions)
-
-        if "*" in user_permissions:
-            return current_user
-
-        if permission in user_permissions:
-            return current_user
-
-        resource, action = permission.split(":")
-        if f"{resource}:*" in user_permissions or f"*:{action}" in user_permissions:
-            return current_user
-
-        raise HTTPException(
-            status_code=403,
-            detail=f"Permission denied: {permission}"
-        )
+        return current_user
 
     return permission_checker

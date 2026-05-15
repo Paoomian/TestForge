@@ -1,5 +1,6 @@
 <template>
   <div class="test-case-list">
+    <template v-if="props.projectId">
     <!-- 搜索栏 -->
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space wrap>
@@ -82,6 +83,7 @@
 
     <!-- 表格 -->
     <a-table
+      v-if="props.projectId"
       :columns="columns"
       :data="tableData"
       :loading="loading"
@@ -132,11 +134,15 @@
         </a-space>
       </template>
     </a-table>
+    </template>
+
+    <!-- 未选中项目时的提示 -->
+    <a-empty v-else description="请先在左侧选择项目或模块" style="margin-top: 120px" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import {
@@ -154,10 +160,6 @@ interface Props {
 
 const props = defineProps<Props>()
 const router = useRouter()
-
-onMounted(() => {
-  loadData()
-})
 
 watch(() => [props.projectId, props.module], () => {
   pagination.current = 1

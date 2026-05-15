@@ -227,6 +227,7 @@ const filterTree = (nodes: TreeNode[], keyword: string): TreeNode[] => {
 const handleSelect = (_keys: (string | number)[], data: any) => {
   const node = data.node as TreeNode
   selectedNode.value = node
+  selectedKeys.value = _keys.map(String)
   if (node.isProject) {
     emit('select', { projectId: node.projectId })
   } else {
@@ -259,6 +260,7 @@ const handleDeleteModule = async () => {
     await deleteModule(projectId, moduleName)
     Message.success('模块已删除')
     selectedNode.value = null
+    selectedKeys.value = []
     emit('select', {})
 
     console.log('[DEBUG] Reloading tree data...')
@@ -323,6 +325,7 @@ const handleConfirmRenameModule = async () => {
     Message.success('模块重命名成功')
     renameModuleVisible.value = false
     selectedNode.value = null
+    selectedKeys.value = []
     emit('select', {})
     await loadData()
   } catch (error) {
@@ -369,5 +372,9 @@ defineExpose({
 .tree-toolbar-buttons {
   display: flex;
   gap: 8px;
+}
+
+:deep(.arco-tree-node-title) {
+  flex: 1;
 }
 </style>

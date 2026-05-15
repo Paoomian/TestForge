@@ -10,52 +10,69 @@
 
     <!-- 请求配置卡片 -->
     <a-card :bordered="false" class="request-card">
-      <a-form :model="requestData" layout="vertical">
-        <a-form-item label="请求配置">
-          <a-space style="width: 100%">
-            <a-select v-model="requestData.method" style="width: 120px">
-              <a-option value="GET">GET</a-option>
-              <a-option value="POST">POST</a-option>
-              <a-option value="PUT">PUT</a-option>
-              <a-option value="DELETE">DELETE</a-option>
-              <a-option value="PATCH">PATCH</a-option>
-            </a-select>
-            <a-input
-              v-model="requestData.url"
-              placeholder="请输入请求URL，如：https://api.example.com/users"
-              style="flex: 1"
-            />
-            <a-button type="primary" @click="sendRequest" :loading="loading">
-              <template #icon><icon-send /></template>
-              发送请求
-            </a-button>
-          </a-space>
-        </a-form-item>
+      <!-- 请求方法 + URL -->
+      <div class="request-line">
+        <HttpMethodSelect v-model="requestData.method" />
+        <a-input
+          v-model="requestData.url"
+          placeholder="请输入请求URL，如：https://api.example.com/users"
+          class="url-input"
+          @keyup.enter="sendRequest"
+        />
+        <a-button type="primary" @click="sendRequest" :loading="loading">
+          <template #icon><icon-send /></template>
+          发送请求
+        </a-button>
+      </div>
 
-        <a-tabs>
-          <a-tab-pane key="headers" title="Headers">
-            <a-textarea
-              v-model="headersText"
-              placeholder='{"Content-Type": "application/json"}'
-              :auto-size="{ minRows: 3, maxRows: 8 }"
-            />
-          </a-tab-pane>
-          <a-tab-pane key="params" title="Query Params">
-            <a-textarea
-              v-model="paramsText"
-              placeholder='{"key": "value"}'
-              :auto-size="{ minRows: 3, maxRows: 8 }"
-            />
-          </a-tab-pane>
-          <a-tab-pane key="body" title="Body">
-            <a-textarea
-              v-model="requestData.body"
-              placeholder='{"key": "value"}'
-              :auto-size="{ minRows: 5, maxRows: 15 }"
-            />
-          </a-tab-pane>
-        </a-tabs>
-      </a-form>
+      <!-- 参数配置 Tabs -->
+      <a-tabs default-active-key="headers" size="small" class="config-tabs">
+        <a-tab-pane key="headers">
+          <template #title>
+            Headers
+            <a-badge v-if="enabledHeadersCount > 0" :count="enabledHeadersCount" :max="99" />
+          </template>
+          <KeyValueEditor
+            v-model="headers"
+            key-placeholder="Header Name"
+            value-placeholder="Header Value"
+            add-text="添加请求头"
+          />
+        </a-tab-pane>
+
+        <a-tab-pane key="params">
+          <template #title>
+            Query Params
+            <a-badge v-if="enabledParamsCount > 0" :count="enabledParamsCount" :max="99" />
+          </template>
+          <KeyValueEditor
+            v-model="queryParams"
+            key-placeholder="参数名"
+            value-placeholder="参数值"
+            add-text="添加查询参数"
+          />
+        </a-tab-pane>
+
+        <a-tab-pane key="body">
+          <template #title>Body</template>
+          <BodyEditor
+            :body-type="bodyType"
+            :body-form="bodyForm"
+            :raw-content="rawContent"
+            @update:body-type="bodyType = $event"
+            @update:body-form="bodyForm = $event"
+            @update:raw-content="rawContent = $event"
+          />
+        </a-tab-pane>
+
+        <a-tab-pane key="auth">
+          <template #title>Auth</template>
+          <AuthConfig
+            :model-value="authData"
+            @update:model-value="authData = $event"
+          />
+        </a-tab-pane>
+      </a-tabs>
     </a-card>
 
     <!-- 响应结果卡片 -->
@@ -76,32 +93,58 @@
 
       <div class="response-body-section">
         <h4 class="section-label">响应体</h4>
-        <a-textarea
-          :model-value="formatResponse(response.body)"
-          readonly
-          :auto-size="{ minRows: 10, maxRows: 30 }"
-        />
+        <div class="response-body-box" v-html="highlightedBody"></div>
       </div>
     </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import request from '@/utils/request'
+import HttpMethodSelect from '@/views/api-test/components/HttpMethodSelect.vue'
+import KeyValueEditor from '@/views/api-test/components/KeyValueEditor.vue'
+import type { KVRow } from '@/views/api-test/components/KeyValueEditor.vue'
+import BodyEditor from '@/views/api-test/components/BodyEditor.vue'
+import AuthConfig from '@/views/api-test/components/AuthConfig.vue'
+import type { BodyFormItem, AuthConfig as AuthConfigType } from '@/api/apiTestCase'
 
 const loading = ref(false)
-const headersText = ref('{}')
-const paramsText = ref('{}')
 
+// 请求数据
 const requestData = reactive({
   method: 'GET',
-  url: '',
-  body: ''
+  url: ''
 })
 
+const headers = ref<KVRow[]>([{ enabled: true, key: '', value: '', description: '' }])
+const queryParams = ref<KVRow[]>([{ enabled: true, key: '', value: '', description: '' }])
+const bodyType = ref('none')
+const bodyForm = ref<BodyFormItem[]>([])
+const rawContent = ref('')
+const authData = ref<AuthConfigType>({ auth_type: 'none' })
+
 const response = ref<any>(null)
+
+// 计算已启用的 key 数量
+const enabledHeadersCount = computed(() =>
+  headers.value.filter(h => h.enabled && h.key).length
+)
+const enabledParamsCount = computed(() =>
+  queryParams.value.filter(p => p.enabled && p.key).length
+)
+
+// KVRow[] 转 {key: value} 对象
+function kvToDict(rows: KVRow[]): Record<string, string> {
+  const dict: Record<string, string> = {}
+  for (const row of rows) {
+    if (row.enabled && row.key) {
+      dict[row.key] = row.value
+    }
+  }
+  return dict
+}
 
 const sendRequest = async () => {
   if (!requestData.url) {
@@ -111,8 +154,28 @@ const sendRequest = async () => {
 
   loading.value = true
   try {
-    const headers = JSON.parse(headersText.value || '{}')
-    const params = JSON.parse(paramsText.value || '{}')
+    const headersDict = kvToDict(headers.value)
+    const paramsDict = kvToDict(queryParams.value)
+
+    // 根据 bodyType 组装 body
+    let bodyStr: string | null = null
+    let sendBodyType = bodyType.value
+
+    if (bodyType.value === 'raw-json') {
+      bodyStr = rawContent.value
+      sendBodyType = 'json'
+    } else if (bodyType.value === 'raw-xml') {
+      bodyStr = rawContent.value
+      sendBodyType = 'xml'
+    } else if (bodyType.value === 'raw-text') {
+      bodyStr = rawContent.value
+      sendBodyType = 'text'
+    } else if (bodyType.value === 'form-data' || bodyType.value === 'x-www-form-urlencoded') {
+      // 表单数据转为 JSON 字符串传递
+      const formDict = kvToDict(bodyForm.value.map(f => ({ ...f })))
+      bodyStr = JSON.stringify(formDict)
+      sendBodyType = bodyType.value === 'form-data' ? 'form-data' : 'x-www-form-urlencoded'
+    }
 
     const res = await request({
       url: '/api-cases/debug',
@@ -120,10 +183,10 @@ const sendRequest = async () => {
       data: {
         method: requestData.method,
         url: requestData.url,
-        headers,
-        query_params: params,
-        body: requestData.body,
-        body_type: 'json'
+        headers: headersDict,
+        query_params: paramsDict,
+        body: bodyStr,
+        body_type: sendBodyType
       }
     })
 
@@ -136,13 +199,27 @@ const sendRequest = async () => {
   }
 }
 
-const formatResponse = (body: string) => {
+// JSON 语法高亮
+const highlightedBody = computed(() => {
+  if (!response.value?.body) return ''
   try {
-    return JSON.stringify(JSON.parse(body), null, 2)
+    const formatted = JSON.stringify(JSON.parse(response.value.body), null, 2)
+    return formatted
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+      .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+      .replace(/: (\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+      .replace(/: (null)/g, ': <span class="json-null">$1</span>')
   } catch {
-    return body
+    return response.value.body
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
   }
-}
+})
 </script>
 
 <style scoped>
@@ -171,6 +248,21 @@ const formatResponse = (body: string) => {
   margin-bottom: 20px;
 }
 
+.request-line {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.url-input {
+  flex: 1;
+}
+
+.config-tabs :deep(.arco-tabs-content) {
+  padding-top: 12px;
+}
+
 .response-card {
   margin-top: 0;
 }
@@ -195,5 +287,40 @@ const formatResponse = (body: string) => {
   font-weight: var(--font-weight-semibold);
   color: var(--gray-700);
   margin: 0 0 12px 0;
+}
+
+.response-body-box {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: 6px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.response-body-box :deep(.json-key) {
+  color: #9cdcfe;
+}
+
+.response-body-box :deep(.json-string) {
+  color: #ce9178;
+}
+
+.response-body-box :deep(.json-number) {
+  color: #b5cea8;
+}
+
+.response-body-box :deep(.json-boolean) {
+  color: #569cd6;
+}
+
+.response-body-box :deep(.json-null) {
+  color: #569cd6;
 }
 </style>
