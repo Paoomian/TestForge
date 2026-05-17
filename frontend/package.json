@@ -11,18 +11,18 @@
     "@arco-design/web-vue": "^2.56.2",
     "@vueuse/core": "^11.2.0",
     "axios": "^1.7.9",
+    "echarts": "^5.5.1",
+    "monaco-editor": "^0.52.2",
     "pinia": "^2.2.8",
     "vue": "^3.5.13",
-    "vue-router": "^4.4.5",
-    "monaco-editor": "^0.52.2",
-    "echarts": "^5.5.1"
+    "vue-router": "^4.4.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3",
-    "vue-tsc": "^2.1.10",
+    "unplugin-auto-import": "^0.18.5",
     "unplugin-vue-components": "^0.27.4",
-    "unplugin-auto-import": "^0.18.5"
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
   }
 }

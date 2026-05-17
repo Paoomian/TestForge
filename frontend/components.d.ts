@@ -65,6 +65,7 @@ declare module 'vue' {
     ATree: typeof import('@arco-design/web-vue')['Tree']
     ATreeSelect: typeof import('@arco-design/web-vue')['TreeSelect']
     JsonEditor: typeof import('./src/components/JsonEditor.vue')['default']
+    JsonViewer: typeof import('./src/components/JsonViewer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

@@ -252,11 +252,15 @@ async def run_suite(
             detail=f"以下用例已被删除: {missing_case_ids}，请重新创建任务配置"
         )
 
-    # 创建执行明细
+    # 创建执行明细（附带用例快照）
+    case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(suite.case_ids)).all()}
     for order, case_id in enumerate(suite.case_ids, start=1):
+        case = case_snapshot.get(case_id)
         detail = TestRunDetail(
             test_run_id=test_run.id,
             case_id=case_id,
+            case_name=case.name if case else None,
+            case_number=case.case_number if case else None,
             execution_order=order,
             status=TestRunDetailStatus.PENDING.value,
         )

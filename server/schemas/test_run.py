@@ -53,7 +53,7 @@ class BatchRunCreate(BaseModel):
 class BatchRunDetailSummary(BaseModel):
     """用例执行结果摘要（列表展示）"""
     id: int
-    case_id: int
+    case_id: Optional[int] = None
     case_name: Optional[str] = None
     case_number: Optional[str] = None
     execution_order: int
@@ -71,7 +71,7 @@ class BatchRunDetailFull(BaseModel):
     """用例执行完整详情"""
     id: int
     test_run_id: int
-    case_id: int
+    case_id: Optional[int] = None
     case_name: Optional[str] = None
     case_number: Optional[str] = None
     execution_order: int
@@ -162,7 +162,7 @@ class TestSummary(BaseModel):
 
 class APICallStat(BaseModel):
     """单条接口性能统计"""
-    case_id: int
+    case_id: Optional[int] = None
     case_name: Optional[str] = None
     case_number: Optional[str] = None
     api_duration_ms: int

@@ -5,7 +5,7 @@ from .variable_service import VariableService
 
 
 # 响应体截断阈值
-MAX_BODY_SIZE = 10 * 1024  # 10KB
+MAX_BODY_SIZE = 500 * 1024  # 500KB
 
 
 class HttpService:

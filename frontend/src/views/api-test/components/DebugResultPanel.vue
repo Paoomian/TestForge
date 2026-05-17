@@ -128,13 +128,9 @@
         <div v-if="result.response_info" class="section">
           <div class="section-header">
             <span class="section-title">响应体</span>
-            <a-button type="text" size="mini" @click="copyResponse">
-              <template #icon><icon-copy /></template>
-              复制
-            </a-button>
           </div>
           <div class="response-body-wrapper">
-            <pre class="response-body" v-html="highlightedBody"></pre>
+            <JsonViewer :content="result.response_info.body" max-height="400px" />
             <div v-if="result.response_info.truncated" class="truncated-tip">
               响应体过大，已截断显示
             </div>
@@ -230,6 +226,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import JsonViewer from '@/components/JsonViewer.vue'
 import { runTestCase } from '@/api/apiTestCase'
 import { getEnvironments } from '@/api/environment'
 import type { APITestCase, RunResult } from '@/api/apiTestCase'
@@ -283,16 +280,6 @@ const hasScriptOutput = computed(() => {
   return so && (so.setup || so.teardown)
 })
 
-const highlightedBody = computed(() => {
-  const body = result.value?.response_info?.body
-  if (!body) return ''
-  try {
-    const parsed = JSON.parse(body)
-    return syntaxHighlight(JSON.stringify(parsed, null, 2))
-  } catch {
-    return escapeHtml(body)
-  }
-})
 
 const assertionColumns = [
   { title: '状态', dataIndex: 'passed', slotName: 'status', width: 80 },
@@ -382,33 +369,12 @@ const formatJson = (data: any) => {
   try { return JSON.stringify(data, null, 2) } catch { return String(data) }
 }
 
-const syntaxHighlight = (json: string) => {
-  return json.replace(/("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match) => {
-    let cls = 'json-number'
-    if (/^"/.test(match)) {
-      cls = /:$/.test(match) ? 'json-key' : 'json-string'
-    } else if (/true|false/.test(match)) {
-      cls = 'json-boolean'
-    } else if (/null/.test(match)) {
-      cls = 'json-null'
-    }
-    return `<span class="${cls}">${match}</span>`
-  })
-}
-
-const escapeHtml = (str: string) => {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
 
 const copyText = (text: string) => {
   navigator.clipboard.writeText(text)
   Message.success('已复制')
 }
 
-const copyResponse = () => {
-  const body = result.value?.response_info?.body
-  if (body) copyText(body)
-}
 </script>
 
 <style scoped>
@@ -514,16 +480,6 @@ const copyResponse = () => {
   background: var(--gray-800);
 }
 
-.response-body {
-  padding: 16px;
-  font-family: monospace;
-  font-size: var(--font-size-xs);
-  color: #e5e7eb;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 .truncated-tip {
   position: sticky;
   bottom: 0;
@@ -533,12 +489,6 @@ const copyResponse = () => {
   color: var(--warning-dark);
   font-size: var(--font-size-xs);
 }
-
-:deep(.json-key) { color: #93c5fd; }
-:deep(.json-string) { color: #86efac; }
-:deep(.json-number) { color: #fcd34d; }
-:deep(.json-boolean) { color: #c4b5fd; }
-:deep(.json-null) { color: #9ca3af; }
 
 /* 请求快照 */
 .snapshot-content {

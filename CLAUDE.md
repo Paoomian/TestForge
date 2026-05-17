@@ -81,6 +81,18 @@ from .config import settings
 - **TypeScript**: 使用严格模式，明确类型定义
 - **Vue**: 使用 Composition API + `<script setup>`
 
+### UI 设计规范
+
+**风格**: 淡蓝紫低饱和渐变、清新科技感。详细规范见 `frontend/UI_STYLE_GUIDE.md`。
+
+核心规则：
+- 使用 CSS 变量（`--primary-*`, `--radius-*`, `--space-*`），禁止硬编码颜色值
+- 颜色用 Arco 内置色板（blue, green, orange, red, purple, gray）
+- 卡片左彩边 + hover 阴影：`border-left: 4px solid` + `box-shadow`
+- 表单垂直布局 `layout="vertical"`，标签宽 `80px`
+- 所有状态变化加 `transition: all 0.2s ease`
+- UI 文案使用中文
+
 ### 提交规范
 
 ```

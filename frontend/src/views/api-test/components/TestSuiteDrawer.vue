@@ -27,48 +27,70 @@
         <a-textarea v-model="form.description" placeholder="任务描述（可选）" :max-length="200" show-word-limit />
       </a-form-item>
 
-      <!-- 选择用例 -->
-      <a-form-item label="选择用例">
-        <div class="case-selector">
-          <!-- 筛选条件 -->
-          <div class="case-filter">
-            <a-select v-model="filterPriority" placeholder="优先级" style="width: 120px" allow-clear>
-              <a-option value="P0">P0 致命</a-option>
-              <a-option value="P1">P1 严重</a-option>
-              <a-option value="P2">P2 一般</a-option>
-              <a-option value="P3">P3 轻微</a-option>
-            </a-select>
-            <a-select v-model="filterModule" placeholder="模块" style="width: 150px" allow-clear>
-              <a-option v-for="m in modules" :key="m" :value="m">{{ m }}</a-option>
-            </a-select>
-            <a-input v-model="filterKeyword" placeholder="搜索用例名称" style="width: 180px" allow-clear>
-              <template #prefix><icon-search /></template>
-            </a-input>
-            <a-button type="outline" size="small" @click="selectAllFiltered">全选筛选结果</a-button>
-            <a-button size="small" @click="clearSelection">清空选择</a-button>
-          </div>
-
-          <!-- 用例列表 -->
-          <div class="case-list">
-            <a-checkbox-group v-model="form.case_ids">
-              <div v-for="c in filteredCases" :key="c.id" class="case-item">
-                <a-checkbox :value="c.id">
-                  <div class="case-info">
-                    <span class="case-number">{{ c.case_number }}</span>
-                    <span class="case-name">{{ c.name }}</span>
-                    <a-tag size="small" :color="getMethodColor(c.method)">{{ c.method }}</a-tag>
-                    <a-tag size="small" :color="getPriorityColor(c.priority)">{{ c.priority }}</a-tag>
-                  </div>
-                </a-checkbox>
+      <!-- 用例配置 -->
+      <a-form-item label="用例配置">
+        <a-tabs v-model:active-key="configMode" type="card">
+          <!-- 简单模式 -->
+          <a-tab-pane key="simple" title="简单模式">
+            <div class="case-selector">
+              <!-- 筛选条件 -->
+              <div class="case-filter">
+                <a-select v-model="filterPriority" placeholder="优先级" style="width: 120px" allow-clear>
+                  <a-option value="P0">P0 致命</a-option>
+                  <a-option value="P1">P1 严重</a-option>
+                  <a-option value="P2">P2 一般</a-option>
+                  <a-option value="P3">P3 轻微</a-option>
+                </a-select>
+                <a-select v-model="filterModule" placeholder="模块" style="width: 150px" allow-clear>
+                  <a-option v-for="m in modules" :key="m" :value="m">{{ m }}</a-option>
+                </a-select>
+                <a-input v-model="filterKeyword" placeholder="搜索用例名称" style="width: 180px" allow-clear>
+                  <template #prefix><icon-search /></template>
+                </a-input>
+                <a-button type="outline" size="small" @click="selectAllFiltered">全选筛选结果</a-button>
+                <a-button size="small" @click="clearSelection">清空选择</a-button>
               </div>
-            </a-checkbox-group>
-            <a-empty v-if="filteredCases.length === 0" description="暂无用例" />
-          </div>
 
-          <div class="case-selected-count">
-            已选 <strong>{{ form.case_ids.length }}</strong> 个用例
-          </div>
-        </div>
+              <!-- 用例列表 -->
+              <div class="case-list">
+                <a-checkbox-group v-model="form.case_ids">
+                  <div v-for="c in filteredCases" :key="c.id" class="case-item">
+                    <a-checkbox :value="c.id">
+                      <div class="case-info">
+                        <span class="case-number">{{ c.case_number }}</span>
+                        <span class="case-name">{{ c.name }}</span>
+                        <a-tag size="small" :color="getMethodColor(c.method)">{{ c.method }}</a-tag>
+                        <a-tag size="small" :color="getPriorityColor(c.priority)">{{ c.priority }}</a-tag>
+                      </div>
+                    </a-checkbox>
+                  </div>
+                </a-checkbox-group>
+                <a-empty v-if="filteredCases.length === 0" description="暂无用例" />
+              </div>
+
+              <div class="case-selected-count">
+                已选 <strong>{{ form.case_ids.length }}</strong> 个用例
+              </div>
+            </div>
+
+            <!-- 已选用例排序 -->
+            <SelectedCaseList
+              :cases="selectedCases"
+              @reorder="handleReorder"
+              @remove="handleRemoveCase"
+              style="margin-top: 16px;"
+            />
+          </a-tab-pane>
+
+          <!-- 场景编排模式 -->
+          <a-tab-pane key="orchestration" title="场景编排">
+            <SceneOrchestrator
+              v-model="sceneNodes"
+              :cases="cases"
+              :suite-id="form.id || 0"
+            />
+          </a-tab-pane>
+        </a-tabs>
       </a-form-item>
 
       <!-- 执行配置 -->
@@ -128,6 +150,9 @@ import { getEnvironments } from '@/api/environment'
 import { createTestSuite, updateTestSuite, getTestSuite } from '@/api/testSuite'
 import type { TestSuiteListItem } from '@/api/testSuite'
 import type { APITestCase, Environment } from '@/api/apiTestCase'
+import type { SceneNodeItem } from '@/api/sceneNode'
+import SceneOrchestrator from './SceneOrchestrator.vue'
+import SelectedCaseList from './SelectedCaseList.vue'
 
 interface Props {
   visible: boolean
@@ -156,7 +181,12 @@ const filterPriority = ref<string>()
 const filterModule = ref<string>()
 const filterKeyword = ref('')
 
+// 配置模式：simple-简单模式 / orchestration-场景编排
+const configMode = ref<'simple' | 'orchestration'>('simple')
+const sceneNodes = ref<SceneNodeItem[]>([])
+
 const form = reactive({
+  id: undefined as number | undefined,
   project_id: undefined as number | undefined,
   name: '',
   description: '',
@@ -176,6 +206,13 @@ const filteredCases = computed(() => {
     if (filterKeyword.value && !c.name.includes(filterKeyword.value)) return false
     return true
   })
+})
+
+// 已选用例（按 case_ids 顺序）
+const selectedCases = computed(() => {
+  return form.case_ids
+    .map(id => cases.value.find(c => c.id === id))
+    .filter(Boolean) as APITestCase[]
 })
 
 // 加载项目列表
@@ -236,6 +273,14 @@ const clearSelection = () => {
   form.case_ids = []
 }
 
+const handleReorder = (orderedIds: number[]) => {
+  form.case_ids = orderedIds
+}
+
+const handleRemoveCase = (caseId: number) => {
+  form.case_ids = form.case_ids.filter(id => id !== caseId)
+}
+
 const getMethodColor = (method: string) => {
   const colors: Record<string, string> = { GET: 'blue', POST: 'green', PUT: 'orange', DELETE: 'red', PATCH: 'purple' }
   return colors[method] || 'gray'
@@ -259,18 +304,32 @@ const handleSubmit = async () => {
     Message.warning('请选择执行环境')
     return
   }
-  if (form.case_ids.length === 0) {
+
+  // 根据模式校验
+  if (configMode.value === 'simple' && form.case_ids.length === 0) {
     Message.warning('请至少选择一个用例')
+    return
+  }
+  if (configMode.value === 'orchestration' && sceneNodes.value.length === 0) {
+    Message.warning('请至少添加一个编排节点')
     return
   }
 
   loading.value = true
   try {
+    // 场景编排模式下，从节点中提取case_ids
+    let submitCaseIds = form.case_ids
+    if (configMode.value === 'orchestration') {
+      submitCaseIds = sceneNodes.value
+        .filter(n => n.node_type === 'api_call' && n.case_id)
+        .map(n => n.case_id as number)
+    }
+
     if (isEdit.value && props.editData) {
       await updateTestSuite(props.editData.id, {
         name: form.name,
         description: form.description,
-        case_ids: form.case_ids,
+        case_ids: submitCaseIds,
         environment_id: form.environment_id,
         concurrency: form.concurrency,
         failure_strategy: form.failure_strategy,
@@ -283,7 +342,7 @@ const handleSubmit = async () => {
         project_id: form.project_id,
         name: form.name,
         description: form.description,
-        case_ids: form.case_ids,
+        case_ids: submitCaseIds,
         environment_id: form.environment_id,
         concurrency: form.concurrency,
         failure_strategy: form.failure_strategy,
@@ -310,6 +369,7 @@ watch(() => props.visible, async (val) => {
       // 编辑模式，加载详情
       try {
         const detail = await getTestSuite(props.editData.id)
+        form.id = detail.id
         form.project_id = detail.project_id
         form.name = detail.name
         form.description = detail.description || ''
@@ -322,11 +382,17 @@ watch(() => props.visible, async (val) => {
 
         await loadCases(detail.project_id)
         await loadEnvironments(detail.project_id)
+
+        // 判断使用哪种模式（有场景节点则切换到编排模式）
+        if (detail.case_ids.length === 0 && sceneNodes.value.length > 0) {
+          configMode.value = 'orchestration'
+        }
       } catch (e) {
         Message.error('加载任务详情失败')
       }
     } else {
       // 新建模式
+      form.id = undefined
       form.project_id = props.projectId
       form.name = ''
       form.description = ''
@@ -336,6 +402,8 @@ watch(() => props.visible, async (val) => {
       form.failure_strategy = 'continue'
       form.tags = []
       form.variables = {}
+      configMode.value = 'simple'
+      sceneNodes.value = []
 
       if (props.projectId) {
         await loadCases(props.projectId)
@@ -347,6 +415,19 @@ watch(() => props.visible, async (val) => {
 </script>
 
 <style scoped>
+/* Tab 样式增强 */
+:deep(.arco-tabs-nav-type-card) {
+  margin-bottom: 16px;
+}
+
+:deep(.arco-tabs-tab) {
+  font-size: 13px;
+}
+
+:deep(.arco-tabs-content) {
+  padding: 0;
+}
+
 .case-selector {
   border: 1px solid var(--color-border-2);
   border-radius: var(--radius-medium);

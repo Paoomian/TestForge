@@ -62,11 +62,15 @@ async def create_batch_run(
     db.add(test_run)
     db.flush()
 
-    # 创建用例执行明细
+    # 创建用例执行明细（附带用例快照）
+    case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(req.case_ids)).all()}
     for order, case_id in enumerate(req.case_ids, start=1):
+        case = case_snapshot.get(case_id)
         detail = TestRunDetail(
             test_run_id=test_run.id,
             case_id=case_id,
+            case_name=case.name if case else None,
+            case_number=case.case_number if case else None,
             execution_order=order,
             status=TestRunDetailStatus.PENDING,
         )
@@ -292,7 +296,7 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
     error_count = 0
 
     for d in details:
-        case = case_map.get(d.case_id)
+        case = case_map.get(d.case_id) if d.case_id else None
         # 从 response_info 中提取接口响应时间和状态码
         api_duration_ms = None
         status_code = None
@@ -311,8 +315,8 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
         detail_summaries.append(BatchRunDetailSummary(
             id=d.id,
             case_id=d.case_id,
-            case_name=case.name if case else None,
-            case_number=case.case_number if case else None,
+            case_name=d.case_name or (case.name if case else None),
+            case_number=d.case_number or (case.case_number if case else None),
             execution_order=d.execution_order,
             status=d.status or "pending",
             duration_ms=d.duration_ms,
@@ -441,26 +445,26 @@ def _build_run_report(run: TestRun, db: Session) -> BatchRunReport:
     )
 
     # 6. 收集响应时间用于性能统计
-    response_times = []  # [(case_id, elapsed_ms)]
+    response_times = []  # [(case_id, elapsed_ms, detail)]
     for d in details:
         if d.response_info and d.response_info.get('elapsed_ms') is not None:
-            response_times.append((d.case_id, d.response_info['elapsed_ms']))
+            response_times.append((d.case_id, d.response_info['elapsed_ms'], d))
 
     sorted_times = sorted(response_times, key=lambda x: x[1])
     time_values = [t[1] for t in sorted_times]
 
     # 构建 Top5 列表
-    def _make_api_stat(case_id, ms):
-        case = case_map.get(case_id)
+    def _make_api_stat(case_id, ms, detail=None):
+        case = case_map.get(case_id) if case_id else None
         return APICallStat(
             case_id=case_id,
-            case_name=case.name if case else None,
-            case_number=case.case_number if case else None,
+            case_name=(detail.case_name if detail and detail.case_name else (case.name if case else None)),
+            case_number=(detail.case_number if detail and detail.case_number else (case.case_number if case else None)),
             api_duration_ms=ms,
         )
 
-    slowest_top5 = [_make_api_stat(cid, ms) for cid, ms in sorted_times[-5:][::-1]]
-    fastest_top5 = [_make_api_stat(cid, ms) for cid, ms in sorted_times[:5]]
+    slowest_top5 = [_make_api_stat(cid, ms, d) for cid, ms, d in sorted_times[-5:][::-1]]
+    fastest_top5 = [_make_api_stat(cid, ms, d) for cid, ms, d in sorted_times[:5]]
 
     performance = PerformanceStats(
         avg_response_ms=round(sum(time_values) / len(time_values), 1) if time_values else 0,
@@ -482,7 +486,7 @@ def _build_run_report(run: TestRun, db: Session) -> BatchRunReport:
         category = _categorize_failure(d)
         if category not in categories_map:
             categories_map[category] = []
-        case = case_map.get(d.case_id)
+        case = case_map.get(d.case_id) if d.case_id else None
         # 构建断言详情
         assertion_details = []
         if d.assertions:
@@ -498,7 +502,7 @@ def _build_run_report(run: TestRun, db: Session) -> BatchRunReport:
         categories_map[category].append({
             "detail_id": d.id,
             "case_id": d.case_id,
-            "case_name": case.name if case else None,
+            "case_name": d.case_name or (case.name if case else None),
             "error_message": d.error_message or "",
             "assertions": assertion_details,
         })

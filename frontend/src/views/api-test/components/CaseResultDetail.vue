@@ -88,7 +88,7 @@
             </a-descriptions>
             <div class="snapshot-section">
               <div class="snapshot-label">响应体</div>
-              <pre class="code-block response-body">{{ formatResponseBody(detail.response_info.body) }}</pre>
+              <JsonViewer :content="detail.response_info.body" max-height="300px" />
             </div>
           </div>
           <a-empty v-else description="无响应信息" />
@@ -154,6 +154,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import JsonViewer from '@/components/JsonViewer.vue'
 import { getBatchRunDetail } from '@/api/batchRun'
 import type { CaseDetailFull } from '@/api/batchRun'
 
@@ -255,17 +256,6 @@ const formatSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-const formatResponseBody = (body: any) => {
-  if (!body) return ''
-  if (typeof body === 'string') {
-    try {
-      return JSON.stringify(JSON.parse(body), null, 2)
-    } catch {
-      return body
-    }
-  }
-  return JSON.stringify(body, null, 2)
-}
 </script>
 
 <style scoped>
@@ -347,11 +337,6 @@ const formatResponseBody = (body: any) => {
 
 .code-block.error {
   color: var(--color-danger-6);
-}
-
-.response-body {
-  max-height: 300px;
-  overflow-y: auto;
 }
 
 .script-output-item {

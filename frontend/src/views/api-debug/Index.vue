@@ -93,7 +93,7 @@
 
       <div class="response-body-section">
         <h4 class="section-label">响应体</h4>
-        <div class="response-body-box" v-html="highlightedBody"></div>
+        <JsonViewer :content="response.body" max-height="600px" />
       </div>
     </a-card>
   </div>
@@ -103,6 +103,7 @@
 import { ref, reactive, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import request from '@/utils/request'
+import JsonViewer from '@/components/JsonViewer.vue'
 import HttpMethodSelect from '@/views/api-test/components/HttpMethodSelect.vue'
 import KeyValueEditor from '@/views/api-test/components/KeyValueEditor.vue'
 import type { KVRow } from '@/views/api-test/components/KeyValueEditor.vue'
@@ -199,27 +200,6 @@ const sendRequest = async () => {
   }
 }
 
-// JSON 语法高亮
-const highlightedBody = computed(() => {
-  if (!response.value?.body) return ''
-  try {
-    const formatted = JSON.stringify(JSON.parse(response.value.body), null, 2)
-    return formatted
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
-      .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-      .replace(/: (\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
-      .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-      .replace(/: (null)/g, ': <span class="json-null">$1</span>')
-  } catch {
-    return response.value.body
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-  }
-})
 </script>
 
 <style scoped>
@@ -289,38 +269,4 @@ const highlightedBody = computed(() => {
   margin: 0 0 12px 0;
 }
 
-.response-body-box {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  padding: 16px;
-  border-radius: 6px;
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-.response-body-box :deep(.json-key) {
-  color: #9cdcfe;
-}
-
-.response-body-box :deep(.json-string) {
-  color: #ce9178;
-}
-
-.response-body-box :deep(.json-number) {
-  color: #b5cea8;
-}
-
-.response-body-box :deep(.json-boolean) {
-  color: #569cd6;
-}
-
-.response-body-box :deep(.json-null) {
-  color: #569cd6;
-}
 </style>

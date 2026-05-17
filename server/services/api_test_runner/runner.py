@@ -161,6 +161,153 @@ class TestRunner:
 
         return result
 
+    def prepare_case(
+        self,
+        case_id: int,
+        environment_id: int | None = None,
+        temp_variables: dict[str, str] | None = None,
+    ) -> tuple:
+        """阶段1: 加载用例数据并构建请求配置（同步，供线程池调用）
+        返回 (case, request_config, variables, request_snapshot, error_msg)
+        """
+        case = self._load_case(case_id)
+        if not case:
+            return None, None, None, None, None, f"用例不存在: {case_id}"
+
+        env_vars = {}
+        if environment_id:
+            env_vars = self._load_env_vars(environment_id)
+
+        variables = self.variable_service.merge_variables(
+            env_vars=env_vars,
+            temp_vars=temp_variables,
+        )
+
+        request_config = self._build_request_config(case, variables)
+
+        # 构建请求快照（应用认证信息后脱敏，与 http_service 保持一致）
+        snapshot_headers = dict(request_config["headers"])
+        snapshot_params = dict(request_config["params"])
+        auth_config = request_config.get("auth")
+        if auth_config and auth_config.get("auth_type") != "none":
+            self.http_service._apply_auth(auth_config, snapshot_headers, snapshot_params)
+
+        request_snapshot = {
+            "method": request_config["method"].upper(),
+            "url": request_config["url"],
+            "headers": self.variable_service.mask_sensitive(snapshot_headers),
+            "params": snapshot_params,
+            "body": request_config.get("body"),
+            "body_type": case.body_type,
+        }
+
+        # 执行前置脚本
+        setup_output = None
+        if case.setup_script:
+            script_result = self.script_service.execute(
+                case.setup_script,
+                {"variables": variables, "request": request_config}
+            )
+            setup_output = {
+                "success": script_result.success,
+                "output": script_result.output,
+                "error": script_result.error,
+            }
+            if script_result.variables:
+                variables.update(script_result.variables)
+
+        return case, request_config, variables, request_snapshot, setup_output, None
+
+    async def send_http_request(
+        self,
+        request_config: dict,
+        body_type: str,
+    ) -> dict:
+        """阶段2: 发送HTTP请求（异步，在事件循环上执行，真正并发）"""
+        return await self.http_service.send_request(
+            method=request_config["method"],
+            url=request_config["url"],
+            headers=request_config["headers"],
+            query_params=request_config["params"],
+            body=request_config.get("body"),
+            body_type=body_type,
+            auth_config=request_config.get("auth"),
+        )
+
+    def post_process(
+        self,
+        case: APITestCase,
+        variables: dict[str, str],
+        request_snapshot: dict,
+        response_info: dict,
+        setup_output: dict | None,
+        http_error: str | None,
+    ) -> RunResult:
+        """阶段3: 后置处理（同步，供线程池调用）- 脚本、变量提取、断言"""
+        result = RunResult(status="pass")
+        result.request_snapshot = request_snapshot
+
+        if setup_output:
+            result.script_output["setup"] = setup_output
+
+        if http_error:
+            result.status = "error"
+            result.error_message = http_error
+            result.response_info = response_info
+            return result
+
+        # 执行后置脚本
+        if case.teardown_script:
+            script_result = self.script_service.execute(
+                case.teardown_script,
+                {"variables": variables, "request": request_snapshot, "response": response_info}
+            )
+            result.script_output["teardown"] = {
+                "success": script_result.success,
+                "output": script_result.output,
+                "error": script_result.error,
+            }
+            if script_result.variables:
+                variables.update(script_result.variables)
+
+        # 变量提取
+        extracts = self._load_extracts(case)
+        if extracts:
+            extracted = self.extract_service.extract_variables(extracts, response_info)
+            result.extracted_variables = extracted
+            variables.update(extracted)
+
+        # 数据规则执行
+        data_rules = self._load_data_rules(case)
+        if data_rules:
+            rule_results = self.data_rule_service.execute_rules(data_rules, variables, response_info)
+            result.data_rule_variables = rule_results
+            variables.update(rule_results)
+
+        # 断言执行
+        assertions = self._load_assertions(case)
+        if assertions:
+            assertion_results = self.assertion_service.execute_assertions(
+                assertions, response_info, variables
+            )
+            result.assertions = [
+                AssertionResult(
+                    assertion_type=r.assertion_type,
+                    field=r.field,
+                    operator=r.operator,
+                    expected=r.expected,
+                    actual=r.actual,
+                    passed=r.passed,
+                    error=r.error,
+                )
+                for r in assertion_results
+            ]
+            if any(not r.passed for r in assertion_results):
+                result.status = "fail"
+
+        result.response_info = response_info
+        return result
+
     def _load_case(self, case_id: int) -> APITestCase | None:
         """加载用例"""
         from sqlalchemy.orm import joinedload
