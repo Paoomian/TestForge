@@ -7,12 +7,23 @@ from .variable_service import VariableService
 # 响应体截断阈值
 MAX_BODY_SIZE = 500 * 1024  # 500KB
 
+# 模块级共享客户端，复用连接池避免每次请求重建TCP连接
+_default_client = httpx.AsyncClient(timeout=30, follow_redirects=True)
+
+
+def _get_default_client() -> httpx.AsyncClient:
+    global _default_client
+    if _default_client.is_closed:
+        _default_client = httpx.AsyncClient(timeout=30, follow_redirects=True)
+    return _default_client
+
 
 class HttpService:
     """HTTP请求封装服务"""
 
-    def __init__(self):
+    def __init__(self, shared_client: httpx.AsyncClient | None = None):
         self.variable_service = VariableService()
+        self._shared_client = shared_client
 
     async def send_request(
         self,
@@ -54,15 +65,15 @@ class HttpService:
         # 发送请求
         start_time = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.request(
-                    method=method.upper(),
-                    url=url,
-                    headers=final_headers,
-                    params=final_params,
-                    content=request_body if isinstance(request_body, (bytes, str)) else None,
-                    json=request_body if isinstance(request_body, dict) and body_type == "raw-json" else None,
-                )
+            client = self._shared_client or _get_default_client()
+            response = await client.request(
+                method=method.upper(),
+                url=url,
+                headers=final_headers,
+                params=final_params,
+                content=request_body if isinstance(request_body, (bytes, str)) else None,
+                json=request_body if isinstance(request_body, dict) and body_type == "raw-json" else None,
+            )
         except httpx.TimeoutException:
             elapsed = int((time.monotonic() - start_time) * 1000)
             return {

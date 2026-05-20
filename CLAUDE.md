@@ -5,6 +5,7 @@
 集UI自动化、接口自动化和接口调试于一体的现代化测试平台。
 
 **技术栈**:
+
 - 后端: FastAPI + SQLAlchemy + MySQL 8.0 + Redis + Celery
 - 前端: Vue 3 + TypeScript + Arco Design Vue + Pinia
 - 认证: JWT双Token (Access Token 30min + Refresh Token 7天)
@@ -86,24 +87,13 @@ from .config import settings
 **风格**: 淡蓝紫低饱和渐变、清新科技感。详细规范见 `frontend/UI_STYLE_GUIDE.md`。
 
 核心规则：
+
 - 使用 CSS 变量（`--primary-*`, `--radius-*`, `--space-*`），禁止硬编码颜色值
 - 颜色用 Arco 内置色板（blue, green, orange, red, purple, gray）
 - 卡片左彩边 + hover 阴影：`border-left: 4px solid` + `box-shadow`
 - 表单垂直布局 `layout="vertical"`，标签宽 `80px`
 - 所有状态变化加 `transition: all 0.2s ease`
 - UI 文案使用中文
-
-### 提交规范
-
-```
-feat: 新功能
-fix: 修复bug
-docs: 文档更新
-style: 代码格式调整
-refactor: 重构
-test: 测试相关
-chore: 构建/工具链相关
-```
 
 ### 进度管理
 
@@ -115,28 +105,16 @@ chore: 构建/工具链相关
 - 格式保持简洁，用 checkbox 列表
 
 示例格式：
+
 ```markdown
-## 用例管理功能
-- [x] 数据库子表设计与创建
-- [x] 后端嵌套Schema实现
-- [x] 前端4Tab组件开发
-- [ ] 调试与bug修复
-
-### 技术决策
-- 子表采用删旧插新策略更新，简化逻辑
-- 用例编号格式: TC-{模块码}-{4位序号}
-
-### 待办
-- [ ] 修复编辑保存500错误
-```
-
 ## 待开发功能
 
 - [ ] UI自动化录制与执行
 - [ ] 接口自动化录制 (mitmproxy)
 - [x] 接口自动化执行（单用例调试执行已完成）
 - [x] 接口自动化批量执行（含进度跟踪）
-- [ ] 测试报告生成
+- [x] 测试报告生成（统计/性能/失败分析）
+- [x] 用例场景编排（前端完成，后端待开发）
 - [ ] 定时任务调度 (Celery)
 - [ ] CI/CD集成
 - [ ] 测试数据管理
@@ -146,14 +124,17 @@ chore: 构建/工具链相关
 ## 故障排查
 
 ### 后端无法启动
+
 1. 检查MySQL服务: `sc query MySQL80`
 2. 检查数据库配置: `server/.env`
 3. 检查端口占用: `netstat -ano | findstr 8000`
 
 ### 前端无法访问后端
+
 1. 检查后端健康: `curl http://localhost:8000/health`
 2. 检查CORS配置和前端代理配置
 
 ---
 
-**最后更新**: 2026-05-10
+**最后更新**: 2026-05-20
+```

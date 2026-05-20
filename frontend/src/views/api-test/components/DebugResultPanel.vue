@@ -85,7 +85,10 @@
             <span v-if="result.response_info">
               状态码: <strong>{{ result.response_info.status_code }}</strong>
             </span>
-            <span>耗时: <strong>{{ result.duration_ms }}ms</strong></span>
+            <span v-if="result.response_info?.elapsed_ms != null">
+              接口耗时: <strong class="api-time">{{ result.response_info.elapsed_ms }}ms</strong>
+            </span>
+            <span>总耗时: <strong>{{ result.duration_ms }}ms</strong></span>
             <span v-if="result.response_info">
               大小: <strong>{{ formatSize(result.response_info.size_bytes) }}</strong>
             </span>
@@ -108,6 +111,13 @@
               <div class="snapshot-line">
                 <strong>{{ result.request_snapshot?.method }}</strong>
                 {{ result.request_snapshot?.url }}
+              </div>
+              <div v-if="result.request_snapshot?.params && Object.keys(result.request_snapshot.params).length" class="snapshot-section">
+                <div class="snapshot-label">Query Params</div>
+                <div v-for="(v, k) in result.request_snapshot.params" :key="k" class="snapshot-kv">
+                  <span class="snapshot-key">{{ k }}</span>
+                  <span class="snapshot-value">{{ v }}</span>
+                </div>
               </div>
               <div v-if="result.request_snapshot?.headers" class="snapshot-section">
                 <div class="snapshot-label">Headers</div>
@@ -450,6 +460,10 @@ const copyText = (text: string) => {
 
 .status-info strong {
   color: var(--gray-800);
+}
+
+.api-time {
+  color: #165dff;
 }
 
 /* 区块 */

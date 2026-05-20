@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    :width="680"
+    :width="900"
     :visible="visible"
     title="用例执行详情"
     @update:visible="$emit('update:visible', $event)"
@@ -56,6 +56,13 @@
             <div class="snapshot-line">
               <strong>{{ detail.request_snapshot.method }}</strong>
               {{ detail.request_snapshot.url }}
+            </div>
+            <div v-if="detail.request_snapshot.params && Object.keys(detail.request_snapshot.params).length" class="snapshot-section">
+              <div class="snapshot-label">Query Params</div>
+              <div v-for="(v, k) in detail.request_snapshot.params" :key="k" class="snapshot-kv">
+                <span class="snapshot-key">{{ k }}</span>
+                <span class="snapshot-value">{{ v }}</span>
+              </div>
             </div>
             <div v-if="detail.request_snapshot.headers" class="snapshot-section">
               <div class="snapshot-label">Headers</div>

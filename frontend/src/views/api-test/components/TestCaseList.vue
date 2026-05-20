@@ -60,6 +60,14 @@
         <a-button
           type="primary"
           status="success"
+          @click="showExcelImport = true"
+        >
+          <template #icon><icon-import /></template>
+          导入Excel
+        </a-button>
+        <a-button
+          type="primary"
+          status="success"
           :disabled="selectedRowKeys.length === 0"
           @click="handleBatchRun"
         >
@@ -138,6 +146,13 @@
 
     <!-- 未选中项目时的提示 -->
     <a-empty v-else description="请先在左侧选择项目或模块" style="margin-top: 120px" />
+
+    <!-- Excel 导入弹窗 -->
+    <ExcelImportModal
+      v-model:visible="showExcelImport"
+      :project-id="props.projectId || 0"
+      @success="handleImportSuccess"
+    />
   </div>
 </template>
 
@@ -152,6 +167,7 @@ import {
   batchDelete
 } from '@/api/apiTestCase'
 import type { APITestCase } from '@/api/apiTestCase'
+import ExcelImportModal from './ExcelImportModal.vue'
 
 interface Props {
   projectId?: number
@@ -175,6 +191,7 @@ const emit = defineEmits<{
 const loading = ref(false)
 const tableData = ref<APITestCase[]>([])
 const selectedRowKeys = ref<number[]>([])
+const showExcelImport = ref(false)
 
 const searchForm = reactive({
   keyword: '',
@@ -347,6 +364,10 @@ const handleBatchRun = () => {
     return
   }
   emit('batch-run', selectedCases)
+}
+
+const handleImportSuccess = () => {
+  loadData()
 }
 
 defineExpose({

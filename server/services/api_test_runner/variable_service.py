@@ -60,13 +60,14 @@ class VariableService:
     def mask_sensitive(self, data: dict[str, Any], sensitive_keys: list[str] | None = None) -> dict[str, Any]:
         """敏感字段脱敏"""
         if sensitive_keys is None:
-            sensitive_keys = ["password", "token", "secret", "authorization", "api_key", "api_key_value"]
+            sensitive_keys = ["password", "secret", "api_key", "api_key_value"]
 
         result = {}
         for key, value in data.items():
             if isinstance(value, dict):
                 result[key] = self.mask_sensitive(value, sensitive_keys)
             elif any(sk in key.lower() for sk in sensitive_keys):
+                print(f"[DEBUG] 脱敏字段: key={key}, matched_keywords={[sk for sk in sensitive_keys if sk in key.lower()]}")
                 result[key] = "****" if value else value
             else:
                 result[key] = value

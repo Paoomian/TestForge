@@ -21,6 +21,8 @@ from core.deps import get_current_user, check_permission
 from core.case_number import generate_case_number
 from core.curl_parser import parse_curl
 from core.templates import get_templates
+from schemas.excel_import import ExcelImportRequest, ExcelImportResult
+from core.excel_import_service import import_excel_cases
 
 router = APIRouter()
 
@@ -547,3 +549,31 @@ def copy_test_case(
     db.commit()
     db.refresh(new_case)
     return _load_nested(new_case)
+
+
+# ============================================================
+# Excel 批量导入
+# ============================================================
+
+@router.post("/import-excel", response_model=ExcelImportResult)
+def import_excel(
+    req: ExcelImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:write"))
+):
+    """Excel 批量导入用例"""
+    from models import Project
+
+    # 验证项目是否存在
+    project = db.query(Project).filter(Project.id == req.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    result = import_excel_cases(
+        db=db,
+        cases=req.cases,
+        project_id=req.project_id,
+        creator_id=current_user.id,
+    )
+
+    return result

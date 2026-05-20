@@ -2,6 +2,7 @@ import json
 import time
 import asyncio
 import logging
+import httpx
 import redis
 import redis.asyncio as aioredis
 from datetime import datetime
@@ -74,85 +75,90 @@ class BatchRunner:
             # 分阶段执行
             logger.info(f"[BatchRun] 任务 {self.test_run_id} 开始执行, 共 {len(details)} 个用例, 并发数 {concurrency}")
             cancelled = False
-            for batch_start in range(0, len(details), concurrency):
-                # 检查取消标志
-                if await self._is_cancelled():
-                    cancelled = True
-                    break
-
-                batch = details[batch_start:batch_start + concurrency]
-
-                # 并发执行 HTTP 请求，DB 更新在主 session 串行处理
-                batch_results = await self._run_batch(batch, shared_variables)
-
-                # 处理结果
-                for detail, batch_result in zip(batch, batch_results):
-                    if isinstance(batch_result, Exception):
-                        logger.error(f"[BatchRun] 用例执行异常 detail_id={detail.id}: {batch_result}")
-                        # 标记为 error
-                        detail.status = TestRunDetailStatus.ERROR.value
-                        detail.error_message = f"执行异常: {str(batch_result)}"
-                        detail.finished_at = _now()
-                        self.db.commit()
-                        continue
-
-                    result, extracted_vars = batch_result
-
-                    # 更新详情状态（主 session）
-                    detail.status = result.status
-                    detail.request_snapshot = result.request_snapshot
-                    detail.response_info = result.response_info
-                    detail.assertions = [a.model_dump() for a in result.assertions]
-                    detail.extracted_vars = extracted_vars
-                    detail.script_output = result.script_output
-                    detail.error_message = result.error_message
-                    detail.duration_ms = result.duration_ms
-                    detail.finished_at = _now()
-                    self.db.commit()
-
-                    # 合并变量
-                    if result.status == "pass" and extracted_vars:
-                        shared_variables.update(extracted_vars)
-
-                    # 失败策略
-                    if failure_strategy == "stop" and result.status in ("fail", "error"):
-                        remaining_details = details[batch_start + concurrency:]
-                        for d in remaining_details:
-                            d.status = TestRunDetailStatus.SKIPPED.value
-                        self.db.commit()
+            # 创建共享 HTTP 客户端，所有并发任务复用同一连接池
+            shared_client = httpx.AsyncClient(timeout=30, follow_redirects=True)
+            try:
+                for batch_start in range(0, len(details), concurrency):
+                    # 检查取消标志
+                    if await self._is_cancelled():
                         cancelled = True
                         break
 
-                if cancelled:
-                    break
+                    batch = details[batch_start:batch_start + concurrency]
 
-            # 更新任务状态
-            test_run = self.db.query(TestRun).filter(TestRun.id == self.test_run_id).first()
-            if cancelled and await self._is_cancelled():
-                test_run.status = TestRunStatus.CANCELLED.value
-            elif cancelled:
-                test_run.status = TestRunStatus.DONE.value
-            else:
-                test_run.status = TestRunStatus.DONE.value
+                    # 并发执行 HTTP 请求，DB 更新在主 session 串行处理
+                    batch_results = await self._run_batch(batch, shared_variables, shared_client)
 
-            test_run.end_time = _now()
-            if test_run.start_time:
-                delta = test_run.end_time - test_run.start_time
-                test_run.duration = int(delta.total_seconds() * 1000)
+                    # 处理结果
+                    for detail, batch_result in zip(batch, batch_results):
+                        if isinstance(batch_result, Exception):
+                            logger.error(f"[BatchRun] 用例执行异常 detail_id={detail.id}: {batch_result}")
+                            # 标记为 error
+                            detail.status = TestRunDetailStatus.ERROR.value
+                            detail.error_message = f"执行异常: {str(batch_result)}"
+                            detail.finished_at = _now()
+                            self.db.commit()
+                            continue
 
-            # 重新统计
-            self._update_counts(test_run)
-            logger.info(f"[BatchRun] 任务 {self.test_run_id} 统计: pass={test_run.pass_count}, fail={test_run.fail_count}, error={test_run.error_count}, total={test_run.total_count}")
-            self.db.commit()
+                        result, extracted_vars = batch_result
 
-            # 发送任务完成消息
-            await self._publish({
-                "type": "task_finish",
-                "task_id": self.test_run_id,
-                "pass_count": test_run.pass_count,
-                "fail_count": test_run.fail_count,
-                "error_count": test_run.error_count,
-            })
+                        # 更新详情状态（主 session）
+                        detail.status = result.status
+                        detail.request_snapshot = result.request_snapshot
+                        detail.response_info = result.response_info
+                        detail.assertions = [a.model_dump() for a in result.assertions]
+                        detail.extracted_vars = extracted_vars
+                        detail.script_output = result.script_output
+                        detail.error_message = result.error_message
+                        detail.duration_ms = result.duration_ms
+                        detail.finished_at = _now()
+                        self.db.commit()
+
+                        # 合并变量
+                        if result.status == "pass" and extracted_vars:
+                            shared_variables.update(extracted_vars)
+
+                        # 失败策略
+                        if failure_strategy == "stop" and result.status in ("fail", "error"):
+                            remaining_details = details[batch_start + concurrency:]
+                            for d in remaining_details:
+                                d.status = TestRunDetailStatus.SKIPPED.value
+                            self.db.commit()
+                            cancelled = True
+                            break
+
+                    if cancelled:
+                        break
+
+                # 更新任务状态
+                test_run = self.db.query(TestRun).filter(TestRun.id == self.test_run_id).first()
+                if cancelled and await self._is_cancelled():
+                    test_run.status = TestRunStatus.CANCELLED.value
+                elif cancelled:
+                    test_run.status = TestRunStatus.DONE.value
+                else:
+                    test_run.status = TestRunStatus.DONE.value
+
+                test_run.end_time = _now()
+                if test_run.start_time:
+                    delta = test_run.end_time - test_run.start_time
+                    test_run.duration = int(delta.total_seconds() * 1000)
+
+                # 重新统计
+                self._update_counts(test_run)
+                logger.info(f"[BatchRun] 任务 {self.test_run_id} 统计: pass={test_run.pass_count}, fail={test_run.fail_count}, error={test_run.error_count}, total={test_run.total_count}")
+                self.db.commit()
+
+                # 发送任务完成消息
+                await self._publish({
+                    "type": "task_finish",
+                    "task_id": self.test_run_id,
+                    "pass_count": test_run.pass_count,
+                    "fail_count": test_run.fail_count,
+                    "error_count": test_run.error_count,
+                })
+            finally:
+                await shared_client.aclose()
 
         except Exception as e:
             logger.error(f"[BatchRun] 任务异常: {e}", exc_info=True)
@@ -175,7 +181,7 @@ class BatchRunner:
             if self.sync_redis:
                 self.sync_redis.close()
 
-    async def _run_batch(self, batch: list, variables: dict):
+    async def _run_batch(self, batch: list, variables: dict, shared_client: httpx.AsyncClient):
         """并发执行一批用例的 HTTP 请求，返回 [(result, vars), ...]"""
         # 1. 批量标记为 running（一次 commit，不阻塞 HTTP）
         now = _now()
@@ -202,7 +208,7 @@ class BatchRunner:
         async def _execute_case(detail):
             db = SessionLocal()
             try:
-                runner = TestRunner(db)
+                runner = TestRunner(db, shared_client=shared_client)
                 start_time = time.monotonic()
 
                 # 阶段1: DB 加载 + 请求构建（线程池，不阻塞事件循环）

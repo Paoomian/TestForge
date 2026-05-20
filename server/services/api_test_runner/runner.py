@@ -18,11 +18,11 @@ from .data_rule_service import DataRuleService
 class TestRunner:
     """测试用例执行器"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shared_client=None):
         self.db = db
         self.variable_service = VariableService()
         self.script_service = ScriptService()
-        self.http_service = HttpService()
+        self.http_service = HttpService(shared_client=shared_client)
         self.assertion_service = AssertionService()
         self.extract_service = ExtractService()
         self.data_rule_service = DataRuleService()
