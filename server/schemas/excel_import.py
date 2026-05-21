@@ -35,6 +35,15 @@ class ExcelAssertionItem(BaseModel):
     description: str = ""
 
 
+class ExcelExtractItem(BaseModel):
+    """Excel 导入的数据提取项"""
+    name: str = Field(..., description="变量名")
+    source: str = Field(..., description="jsonpath/regex/header")
+    expression: str = Field(..., description="提取表达式")
+    default_value: str = ""
+    description: str = ""
+
+
 class ExcelCaseItem(BaseModel):
     """Excel 导入的单条用例"""
     # 主表字段
@@ -54,6 +63,7 @@ class ExcelCaseItem(BaseModel):
     query_params: list[ExcelQueryParamItem] = []
     body_form: list[ExcelBodyFormItem] = []
     assertions: list[ExcelAssertionItem] = []
+    extracts: list[ExcelExtractItem] = []
 
 
 class ExcelImportRequest(BaseModel):
