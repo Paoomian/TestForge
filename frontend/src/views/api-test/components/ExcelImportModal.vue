@@ -161,6 +161,41 @@
                 </div>
               </div>
             </a-card>
+
+            <!-- 数据提取规则 -->
+            <a-card title="数据提取规则" :bordered="true" size="small" class="guide-card">
+              <div class="extract-guide">
+                <div class="extract-section">
+                  <h4>提取来源 (source)</h4>
+                  <a-table :data="extractSources" :pagination="false" :bordered="false" size="small">
+                    <template #columns>
+                      <a-table-column title="来源" data-index="source" :width="100">
+                        <template #cell="{ record }">
+                          <code>{{ record.source }}</code>
+                        </template>
+                      </a-table-column>
+                      <a-table-column title="说明" data-index="desc" :width="120" />
+                      <a-table-column title="expression示例" data-index="expressionExample" :width="180">
+                        <template #cell="{ record }">
+                          <code class="example-code">{{ record.expressionExample }}</code>
+                        </template>
+                      </a-table-column>
+                      <a-table-column title="用途" data-index="descExample" />
+                    </template>
+                  </a-table>
+                </div>
+
+                <div class="extract-section">
+                  <h4>数据提取示例</h4>
+                  <div class="extract-examples">
+                    <div v-for="example in extractExamples" :key="example.title" class="extract-example">
+                      <div class="example-title">{{ example.title }}</div>
+                      <code class="example-json">{{ example.json }}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </a-card>
           </div>
         </a-tab-pane>
       </a-tabs>
@@ -405,6 +440,15 @@
                 />
               </div>
 
+              <!-- 数据提取 -->
+              <div class="expand-section">
+                <div class="section-title">数据提取</div>
+                <ExtractEditor
+                  :model-value="extractsList"
+                  @update:model-value="updateExtracts"
+                />
+              </div>
+
               <!-- 前置条件 & 备注 -->
               <div class="expand-row">
                 <div class="expand-field">
@@ -506,7 +550,7 @@ import {
   IconExpand,
   IconClose,
 } from '@arco-design/web-vue/es/icon'
-import { parseExcelFile, generateExcelTemplate, parseHeaders, parseQueryParams, parseAssertions } from '@/utils/excelParser'
+import { parseExcelFile, generateExcelTemplate, parseHeaders, parseQueryParams, parseAssertions, parseExtracts } from '@/utils/excelParser'
 import type { ParsedCase } from '@/utils/excelParser'
 import { importExcelCases } from '@/api/excelImport'
 import type { ExcelImportResult } from '@/api/excelImport'
@@ -514,6 +558,8 @@ import KeyValueEditor from './KeyValueEditor.vue'
 import type { KVRow } from './KeyValueEditor.vue'
 import AssertionEditor from './AssertionEditor.vue'
 import type { AssertionItem } from '@/api/apiTestCase'
+import ExtractEditor from './ExtractEditor.vue'
+import type { ExtractItem } from '@/api/apiTestCase'
 
 const props = defineProps<{
   projectId: number
@@ -550,6 +596,7 @@ const fieldGuide = [
   { field: '请求头', required: false, desc: 'JSON对象格式', example: '{"Content-Type":"application/json"}' },
   { field: '查询参数', required: false, desc: 'JSON对象格式，URL查询参数', example: '{"page":"1","size":"10"}' },
   { field: '断言', required: false, desc: 'JSON数组格式，详见断言规则', example: '[{"type":"status_code",...}]' },
+  { field: '数据提取', required: false, desc: 'JSON数组格式，详见数据提取规则', example: '[{"name":"token","source":"jsonpath",...}]' },
   { field: '备注', required: false, desc: '备注信息', example: '需要验证码' },
 ]
 
@@ -559,6 +606,27 @@ const assertionTypes = [
   { type: 'header', desc: '响应头字段', needField: true, expectedExample: 'Content-Type → application/json' },
   { type: 'response_time', desc: '响应时间(毫秒)', needField: false, expectedExample: '1000' },
   { type: 'body_contains', desc: '响应体包含文本', needField: false, expectedExample: 'success' },
+]
+
+const extractSources = [
+  { source: 'jsonpath', desc: 'JSONPath表达式', expressionExample: '$.data.token', descExample: '提取JSON响应中的字段' },
+  { source: 'regex', desc: '正则表达式', expressionExample: '"token":"(.*?)"', descExample: '用正则捕获组提取' },
+  { source: 'header', desc: '响应头', expressionExample: 'Content-Type', descExample: '提取响应头字段值' },
+]
+
+const extractExamples = [
+  {
+    title: 'JSONPath提取token',
+    json: '[{"name":"token","source":"jsonpath","expression":"$.data.token","description":"提取登录token"}]',
+  },
+  {
+    title: '正则提取状态码',
+    json: '[{"name":"code","source":"regex","expression":"\\"code\\":(\\\\d+)","description":"提取状态码"}]',
+  },
+  {
+    title: '响应头提取',
+    json: '[{"name":"contentType","source":"header","expression":"Content-Type","description":"提取Content-Type"}]',
+  },
 ]
 
 const assertionOperators = [
@@ -703,6 +771,19 @@ const assertionsList = computed<AssertionItem[]>(() => {
   }))
 })
 
+// 数据提取 JSON → ExtractItem[]
+const extractsList = computed<ExtractItem[]>(() => {
+  if (!expandedRecord.value) return []
+  const arr = safeParseJsonArr(expandedRecord.value.extracts_json)
+  return arr.map((item: any) => ({
+    name: String(item.name || '').trim(),
+    source: String(item.source || 'jsonpath').trim().toLowerCase() as ExtractItem['source'],
+    expression: String(item.expression || '').trim(),
+    default_value: String(item.default_value || item.default || '').trim(),
+    description: String(item.description || '').trim(),
+  }))
+})
+
 // KVRow[] → JSON 字符串（同步回 expandedRecord）
 const updateHeadersFromKV = (rows: KVRow[]) => {
   if (!expandedRecord.value) return
@@ -733,6 +814,16 @@ const updateAssertions = (items: AssertionItem[]) => {
       type: assertion_type, operator, field, expected, description
     }))
   expandedRecord.value.assertions_json = arr.length > 0 ? JSON.stringify(arr) : ''
+}
+
+const updateExtracts = (items: ExtractItem[]) => {
+  if (!expandedRecord.value) return
+  const arr = items
+    .filter(e => e.name && e.expression)
+    .map(({ name, source, expression, default_value, description }) => ({
+      name, source, expression, default_value, description
+    }))
+  expandedRecord.value.extracts_json = arr.length > 0 ? JSON.stringify(arr) : ''
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -868,6 +959,7 @@ const handleImport = async () => {
           query_params: parseQueryParams(c.params_json),
           body_form: bodyForm,
           assertions: parseAssertions(c.assertions_json),
+          extracts: parseExtracts(c.extracts_json),
         }
       }),
       project_id: props.projectId,
@@ -980,6 +1072,31 @@ const handleFinish = () => {
 }
 
 .assertion-example {
+  background-color: var(--color-fill-1);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+}
+
+.extract-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.extract-section h4 {
+  margin: 0 0 var(--space-sm);
+  font-size: 13px;
+  color: var(--color-text-1);
+  font-weight: 500;
+}
+
+.extract-examples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.extract-example {
   background-color: var(--color-fill-1);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
