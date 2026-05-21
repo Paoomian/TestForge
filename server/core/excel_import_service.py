@@ -5,6 +5,7 @@ from models.test_case_header import TestCaseHeader
 from models.test_case_query_param import TestCaseQueryParam
 from models.test_case_body import TestCaseBodyRaw, TestCaseBodyForm
 from models.test_case_assertion import TestCaseAssertion
+from models.test_case_extract import TestCaseExtract
 from schemas.excel_import import ExcelCaseItem, ExcelImportResult, ImportError
 from core.case_number import generate_case_number
 
@@ -15,6 +16,7 @@ VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
 VALID_BODY_TYPES = {"none", "form-data", "x-www-form-urlencoded", "raw-json", "raw-xml", "raw-text"}
 VALID_ASSERTION_TYPES = {"status_code", "jsonpath", "header", "response_time", "body_contains"}
 VALID_ASSERTION_OPERATORS = {"equals", "not_equals", "contains", "greater_than", "less_than", "regex", "exists"}
+VALID_EXTRACT_SOURCES = {"jsonpath", "regex", "header"}
 
 
 def validate_case_item(case: ExcelCaseItem, row: int) -> str | None:
@@ -40,6 +42,15 @@ def validate_case_item(case: ExcelCaseItem, row: int) -> str | None:
             return f"断言{i+1}类型无效：{assertion.assertion_type}"
         if assertion.operator not in VALID_ASSERTION_OPERATORS:
             return f"断言{i+1}运算符无效：{assertion.operator}"
+
+    # 校验数据提取
+    for i, extract in enumerate(case.extracts):
+        if not extract.name:
+            return f"提取{i+1}变量名不能为空"
+        if extract.source not in VALID_EXTRACT_SOURCES:
+            return f"提取{i+1}来源无效：{extract.source}（有效值：{', '.join(VALID_EXTRACT_SOURCES)}）"
+        if not extract.expression:
+            return f"提取{i+1}表达式不能为空"
 
     return None
 
@@ -126,6 +137,18 @@ def create_case_from_excel(
             field=assertion.field,
             expected=assertion.expected,
             description=assertion.description,
+            sort_order=i,
+        ))
+
+    # 创建数据提取
+    for i, extract in enumerate(case.extracts):
+        db.add(TestCaseExtract(
+            test_case_id=db_case.id,
+            name=extract.name,
+            source=extract.source,
+            expression=extract.expression,
+            default_value=extract.default_value,
+            description=extract.description,
             sort_order=i,
         ))
 
