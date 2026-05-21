@@ -9,6 +9,7 @@
       <!-- 基本信息 -->
       <div class="detail-header">
         <div class="detail-title">
+          <a-tag :color="nodeTypeColor" size="small">{{ nodeTypeText }}</a-tag>
           <span class="case-number">{{ detail.case_number }}</span>
           <span class="case-name">{{ detail.case_name }}</span>
         </div>
@@ -27,10 +28,11 @@
       <a-descriptions :column="2" style="margin-bottom: 16px">
         <a-descriptions-item label="执行顺序">{{ detail.execution_order }}</a-descriptions-item>
         <a-descriptions-item label="接口耗时">
-          <span class="api-time">{{ detail.response_info?.elapsed_ms ?? '-' }}ms</span>
+          <span v-if="detail.node_type === 'api_call'" class="api-time">{{ detail.response_info?.elapsed_ms ?? '-' }}ms</span>
+          <span v-else>-</span>
         </a-descriptions-item>
         <a-descriptions-item label="总耗时">{{ detail.duration_ms }}ms</a-descriptions-item>
-        <a-descriptions-item label="状态码">
+        <a-descriptions-item v-if="detail.node_type === 'api_call'" label="状态码">
           <a-tag v-if="detail.response_info" :color="detail.response_info.status_code < 400 ? 'green' : 'red'">
             {{ detail.response_info.status_code }}
           </a-tag>
@@ -49,8 +51,45 @@
         show-icon
       />
 
-      <!-- 请求快照 -->
-      <a-collapse :bordered="false" style="margin-bottom: 16px">
+      <!-- 条件节点详情 -->
+      <template v-if="detail.node_type === 'condition' && detail.request_snapshot">
+        <a-card :bordered="false" title="条件评估" style="margin-bottom: 16px">
+          <a-descriptions :column="2">
+            <a-descriptions-item label="变量名">{{ detail.request_snapshot.variable }}</a-descriptions-item>
+            <a-descriptions-item label="运算符">{{ detail.request_snapshot.operator }}</a-descriptions-item>
+            <a-descriptions-item label="实际值">{{ detail.request_snapshot.actual }}</a-descriptions-item>
+            <a-descriptions-item label="比较值">{{ detail.request_snapshot.expected }}</a-descriptions-item>
+            <a-descriptions-item label="评估结果">
+              <a-tag :color="detail.request_snapshot.result ? 'green' : 'red'">
+                {{ detail.request_snapshot.result ? '真' : '假' }}
+              </a-tag>
+            </a-descriptions-item>
+          </a-descriptions>
+        </a-card>
+      </template>
+
+      <!-- 等待节点详情 -->
+      <template v-if="detail.node_type === 'wait' && detail.request_snapshot">
+        <a-card :bordered="false" title="等待信息" style="margin-bottom: 16px">
+          <a-descriptions :column="1">
+            <a-descriptions-item label="等待时长">{{ detail.request_snapshot.wait_seconds }}秒</a-descriptions-item>
+          </a-descriptions>
+        </a-card>
+      </template>
+
+      <!-- 数据赋值节点详情 -->
+      <template v-if="detail.node_type === 'data_assign' && detail.request_snapshot">
+        <a-card :bordered="false" title="赋值信息" style="margin-bottom: 16px">
+          <a-descriptions :column="2">
+            <a-descriptions-item label="变量名">{{ detail.request_snapshot.variable }}</a-descriptions-item>
+            <a-descriptions-item label="赋值来源">{{ detail.request_snapshot.source === 'static' ? '静态值' : '表达式' }}</a-descriptions-item>
+            <a-descriptions-item label="赋值值" :span="2">{{ detail.request_snapshot.value }}</a-descriptions-item>
+          </a-descriptions>
+        </a-card>
+      </template>
+
+      <!-- 请求快照（仅接口调用节点） -->
+      <a-collapse v-if="detail.node_type === 'api_call'" :bordered="false" style="margin-bottom: 16px">
         <a-collapse-item header="请求快照" key="request">
           <div v-if="detail.request_snapshot" class="snapshot-content">
             <div class="snapshot-line">
@@ -80,8 +119,8 @@
         </a-collapse-item>
       </a-collapse>
 
-      <!-- 响应信息 -->
-      <a-collapse :bordered="false" style="margin-bottom: 16px">
+      <!-- 响应信息（仅接口调用节点） -->
+      <a-collapse v-if="detail.node_type === 'api_call'" :bordered="false" style="margin-bottom: 16px">
         <a-collapse-item header="响应信息" key="response">
           <div v-if="detail.response_info" class="snapshot-content">
             <a-descriptions :column="3" style="margin-bottom: 12px">
@@ -196,16 +235,30 @@ const loadDetail = async () => {
   }
 }
 
+const nodeTypeColor = computed(() => {
+  const colors: Record<string, string> = {
+    api_call: 'blue', condition: 'orange', wait: 'gray', data_assign: 'green'
+  }
+  return colors[detail.value?.node_type || ''] || 'gray'
+})
+
+const nodeTypeText = computed(() => {
+  const texts: Record<string, string> = {
+    api_call: '接口调用', condition: '条件判断', wait: '等待延时', data_assign: '数据赋值'
+  }
+  return texts[detail.value?.node_type || ''] || ''
+})
+
 const statusColor = computed(() => {
   const colors: Record<string, string> = {
-    pass: 'green', fail: 'red', error: 'orange', pending: 'gray', running: 'blue', skipped: 'gray'
+    pass: 'green', fail: 'red', error: 'orange', pending: 'gray', running: 'blue', skipped: 'gray', waiting: 'blue'
   }
   return colors[detail.value?.status || ''] || 'gray'
 })
 
 const statusText = computed(() => {
   const texts: Record<string, string> = {
-    pass: '通过', fail: '失败', error: '错误', pending: '待执行', running: '执行中', skipped: '已跳过'
+    pass: '通过', fail: '失败', error: '错误', pending: '待执行', running: '执行中', skipped: '已跳过', waiting: '等待中'
   }
   return texts[detail.value?.status || ''] || detail.value?.status || ''
 })

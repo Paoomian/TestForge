@@ -20,6 +20,7 @@ class TestRunDetailStatus(str, enum.Enum):
     FAIL = "fail"
     ERROR = "error"
     SKIPPED = "skipped"
+    WAITING = "waiting"  # 等待节点
 
 
 class TestRun(Base):
@@ -31,6 +32,7 @@ class TestRun(Base):
     test_type = Column(String(50), nullable=False, default="api_batch")
 
     # 执行配置
+    config_mode = Column(String(20), default="simple")  # simple / orchestration
     case_ids = Column(JSON, default=list)
     environment_id = Column(Integer, ForeignKey("environments.id"), nullable=True)
     concurrency = Column(Integer, default=1)  # 1/3/5/10
@@ -71,6 +73,8 @@ class TestRunDetail(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     test_run_id = Column(Integer, ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
+    node_id = Column(Integer, ForeignKey("scene_nodes.id", ondelete="SET NULL"), nullable=True)  # 关联场景节点
+    node_type = Column(String(20), default="api_call")  # 节点类型（方便前端展示）
     case_id = Column(Integer, ForeignKey("api_test_cases.id", ondelete="SET NULL"), nullable=True)
     case_name = Column(String(200), nullable=True)   # 执行时快照，删用例后保留
     case_number = Column(String(50), nullable=True)   # 执行时快照，删用例后保留

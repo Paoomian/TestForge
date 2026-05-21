@@ -114,8 +114,8 @@ class BatchRunner:
                         detail.finished_at = _now()
                         self.db.commit()
 
-                        # 合并变量
-                        if result.status == "pass" and extracted_vars:
+                        # 合并变量（无论断言是否成功，提取的变量都应该传递）
+                        if extracted_vars:
                             shared_variables.update(extracted_vars)
 
                         # 失败策略

@@ -1,75 +1,57 @@
 <template>
   <div class="extract-editor">
-    <div class="extract-list">
-      <div v-for="(item, index) in extracts" :key="index" class="extract-item">
-        <a-card :bordered="true" size="small">
-          <template #extra>
-            <a-button
-              type="text"
-              size="small"
-              status="danger"
-              @click="removeExtract(index)"
-            >
-              <template #icon><icon-delete /></template>
-            </a-button>
-          </template>
-
-          <a-form :model="item" layout="vertical">
-            <a-row :gutter="16">
-              <a-col :span="6">
-                <a-form-item label="变量名">
-                  <a-input
-                    v-model="item.name"
-                    placeholder="例如: token"
-                    size="small"
-                    @change="emitChange"
-                  />
-                </a-form-item>
-              </a-col>
-              <a-col :span="4">
-                <a-form-item label="来源">
-                  <a-select v-model="item.source" size="small" @change="emitChange">
-                    <a-option value="jsonpath">JSONPath</a-option>
-                    <a-option value="regex">正则</a-option>
-                    <a-option value="header">响应头</a-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-              <a-col :span="8">
-                <a-form-item :label="getExprLabel(item.source)">
-                  <a-input
-                    v-model="item.expression"
-                    :placeholder="getExprPlaceholder(item.source)"
-                    size="small"
-                    @change="emitChange"
-                  />
-                </a-form-item>
-              </a-col>
-              <a-col :span="4">
-                <a-form-item label="默认值">
-                  <a-input
-                    v-model="item.default_value"
-                    placeholder="可选"
-                    size="small"
-                    @change="emitChange"
-                  />
-                </a-form-item>
-              </a-col>
-            </a-row>
-          </a-form>
-        </a-card>
-      </div>
+    <div v-if="extractors.length === 0" class="empty-hint">
+      暂无数据提取规则，点击下方按钮添加
     </div>
-
-    <a-button type="dashed" long @click="addExtract" style="margin-top: 8px;">
+    <div v-for="(item, index) in extractors" :key="index" class="extract-item">
+      <div class="extract-item-header">
+        <span class="extract-index">#{{ index + 1 }}</span>
+        <a-button type="text" size="mini" status="danger" @click="removeItem(index)">
+          <template #icon><icon-delete /></template>
+        </a-button>
+      </div>
+      <a-form :model="item" layout="vertical" size="small">
+        <a-row :gutter="12">
+          <a-col :span="6">
+            <a-form-item label="变量名" required>
+              <a-input v-model="item.name" placeholder="token" @input="emitChange()" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="提取来源" required>
+              <a-select v-model="item.source" @change="emitChange()">
+                <a-option value="jsonpath">jsonpath</a-option>
+                <a-option value="regex">regex</a-option>
+                <a-option value="header">header</a-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="默认值">
+              <a-input v-model="item.default_value" placeholder="可选" @input="emitChange()" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="说明">
+              <a-input v-model="item.description" placeholder="可选" @input="emitChange()" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="表达式" required>
+          <a-input v-model="item.expression" :placeholder="getPlaceholder(item.source)" @input="emitChange()" />
+        </a-form-item>
+      </a-form>
+    </div>
+    <a-button type="dashed" size="small" long @click="addItem">
       <template #icon><icon-plus /></template>
-      添加变量提取
+      添加数据提取
     </a-button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { IconDelete, IconPlus } from '@arco-design/web-vue/es/icon'
 import type { ExtractItem } from '@/api/apiTestCase'
 
 const props = defineProps<{
@@ -80,66 +62,87 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: ExtractItem[]): void
 }>()
 
-const extracts = ref<ExtractItem[]>([])
+const extractors = ref<ExtractItem[]>([])
 
-// 监听props变化，同步到本地
+// 监听props变化，同步到本地（仅在父组件主动设置时）
 watch(() => props.modelValue, (newValue) => {
-  if (JSON.stringify(newValue) !== JSON.stringify(extracts.value)) {
-    extracts.value = (newValue || []).map(e => ({ ...e }))
+  if (JSON.stringify(newValue) !== JSON.stringify(extractors.value)) {
+    extractors.value = (newValue || []).map(e => ({ ...e }))
   }
 }, { immediate: true })
 
 function emitChange() {
-  emit('update:modelValue', extracts.value.map((e, i) => ({ ...e, sort_order: i })))
+  emit('update:modelValue', extractors.value.map((e, i) => ({ ...e, sort_order: i })))
 }
 
-function addExtract() {
-  extracts.value.push({
+const getPlaceholder = (source: string) => {
+  const placeholders: Record<string, string> = {
+    jsonpath: '$.data.token',
+    regex: '"token":"(.*?)"',
+    header: 'Content-Type',
+  }
+  return placeholders[source] || ''
+}
+
+const addItem = () => {
+  extractors.value.push({
     name: '',
     source: 'jsonpath',
     expression: '',
     default_value: '',
     description: '',
+    sort_order: extractors.value.length,
   })
   emitChange()
 }
 
-function removeExtract(index: number) {
-  extracts.value.splice(index, 1)
+const removeItem = (index: number) => {
+  extractors.value.splice(index, 1)
   emitChange()
-}
-
-function getExprLabel(source: string) {
-  const map: Record<string, string> = {
-    jsonpath: 'JSONPath表达式',
-    regex: '正则表达式',
-    header: '响应头名称',
-  }
-  return map[source] || '表达式'
-}
-
-function getExprPlaceholder(source: string) {
-  const map: Record<string, string> = {
-    jsonpath: '$.data.access_token',
-    regex: '"token":"([^"]+)"',
-    header: 'X-Request-Id',
-  }
-  return map[source] || ''
 }
 </script>
 
 <style scoped>
 .extract-editor {
-  width: 100%;
-}
-
-.extract-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--color-text-3);
+  padding: var(--space-lg);
+  background: var(--color-fill-1);
+  border-radius: var(--radius-md);
 }
 
 .extract-item {
-  width: 100%;
+  background: var(--color-fill-1);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.extract-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+.extract-index {
+  font-size: 12px;
+  color: var(--color-text-3);
+  font-weight: 500;
+}
+
+.extract-item :deep(.arco-form-item) {
+  margin-bottom: 0;
+}
+
+.extract-item :deep(.arco-form-item-label) {
+  font-size: 12px;
+  color: var(--color-text-2);
 }
 </style>

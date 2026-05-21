@@ -84,6 +84,7 @@ async def list_suites(
             project_name=project_map.get(s.project_id),
             name=s.name,
             description=s.description,
+            config_mode=s.config_mode or "simple",
             case_count=len(s.case_ids or []),
             environment_name=env_map.get(s.environment_id),
             concurrency=s.concurrency,
@@ -201,13 +202,12 @@ async def run_suite(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("api_test:execute")),
 ):
-    """执行任务配置（复用批量执行）"""
+    """执行任务配置"""
     suite = db.query(TestSuite).filter(TestSuite.id == suite_id).first()
     if not suite:
         raise HTTPException(status_code=404, detail="任务配置不存在")
 
-    if not suite.case_ids:
-        raise HTTPException(status_code=400, detail="任务配置中没有用例")
+    config_mode = suite.config_mode or "simple"
 
     # 合并配置（请求参数覆盖默认配置）
     environment_id = (req.environment_id if req and req.environment_id else suite.environment_id)
@@ -215,62 +215,132 @@ async def run_suite(
     failure_strategy = (req.failure_strategy if req and req.failure_strategy else suite.failure_strategy)
     variables = {**(suite.variables or {}), **((req.variables if req and req.variables else {}))}
 
-    # 复用批量执行逻辑
     from datetime import datetime, timezone
-    from models import TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus
+    from models import TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, SceneNode
 
     now = datetime.now(timezone.utc)
     task_name = f"{suite.name}-{now.strftime('%Y%m%d%H%M%S')}"
 
-    # 创建执行任务
-    test_run = TestRun(
-        project_id=suite.project_id,
-        name=task_name,
-        test_type="api_batch",
-        case_ids=suite.case_ids,
-        environment_id=environment_id,
-        concurrency=concurrency,
-        failure_strategy=failure_strategy,
-        variables=variables,
-        status=TestRunStatus.PENDING.value,
-        total_count=len(suite.case_ids),
-        creator_id=current_user.id,
-    )
-    db.add(test_run)
-    db.flush()
+    if config_mode == "orchestration":
+        # ========== 场景编排模式 ==========
+        scene_nodes = db.query(SceneNode).filter(
+            SceneNode.suite_id == suite_id
+        ).order_by(SceneNode.sort_order).all()
 
-    # 检查用例是否存在
-    existing_cases = db.query(APITestCase.id).filter(
-        APITestCase.id.in_(suite.case_ids)
-    ).all()
-    existing_case_ids = {c.id for c in existing_cases}
-    missing_case_ids = [cid for cid in suite.case_ids if cid not in existing_case_ids]
+        enabled_nodes = [n for n in scene_nodes if n.enabled]
+        if not enabled_nodes:
+            raise HTTPException(status_code=400, detail="没有启用的编排节点")
 
-    if missing_case_ids:
-        raise HTTPException(
-            status_code=400,
-            detail=f"以下用例已被删除: {missing_case_ids}，请重新创建任务配置"
+        # 校验 api_call 节点的用例存在性
+        api_call_nodes = [n for n in enabled_nodes if n.node_type == "api_call" and n.case_id]
+        if api_call_nodes:
+            case_ids = [n.case_id for n in api_call_nodes]
+            existing_cases = db.query(APITestCase.id).filter(APITestCase.id.in_(case_ids)).all()
+            existing_case_ids = {c.id for c in existing_cases}
+            missing = [cid for cid in case_ids if cid not in existing_case_ids]
+            if missing:
+                raise HTTPException(status_code=400, detail=f"以下用例已被删除: {missing}")
+
+        # 创建执行任务
+        test_run = TestRun(
+            project_id=suite.project_id,
+            name=task_name,
+            test_type="api_scene",
+            config_mode="orchestration",
+            case_ids=[],
+            environment_id=environment_id,
+            concurrency=concurrency,
+            failure_strategy=failure_strategy,
+            variables=variables,
+            status=TestRunStatus.PENDING.value,
+            total_count=len(enabled_nodes),
+            creator_id=current_user.id,
         )
+        db.add(test_run)
+        db.flush()
 
-    # 创建执行明细（附带用例快照）
-    case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(suite.case_ids)).all()}
-    for order, case_id in enumerate(suite.case_ids, start=1):
-        case = case_snapshot.get(case_id)
-        detail = TestRunDetail(
-            test_run_id=test_run.id,
-            case_id=case_id,
-            case_name=case.name if case else None,
-            case_number=case.case_number if case else None,
-            execution_order=order,
-            status=TestRunDetailStatus.PENDING.value,
+        # 为每个节点创建执行明细
+        case_snapshot = {}
+        if api_call_nodes:
+            case_snapshot = {c.id: c for c in db.query(APITestCase).filter(
+                APITestCase.id.in_([n.case_id for n in api_call_nodes])
+            ).all()}
+
+        for order, node in enumerate(enabled_nodes, start=1):
+            case = case_snapshot.get(node.case_id) if node.case_id else None
+            detail = TestRunDetail(
+                test_run_id=test_run.id,
+                node_id=node.id,
+                node_type=node.node_type,
+                case_id=node.case_id if node.node_type == "api_call" else None,
+                case_name=case.name if case else node.name,
+                case_number=case.case_number if case else None,
+                execution_order=order,
+                status=TestRunDetailStatus.PENDING.value,
+            )
+            db.add(detail)
+
+        db.commit()
+
+        # 发送场景执行任务
+        from tasks.scene_run_task import scene_run_task
+        scene_run_task.delay(test_run.id)
+
+    else:
+        # ========== 简单模式 ==========
+        if not suite.case_ids:
+            raise HTTPException(status_code=400, detail="任务配置中没有用例")
+
+        # 创建执行任务
+        test_run = TestRun(
+            project_id=suite.project_id,
+            name=task_name,
+            test_type="api_batch",
+            config_mode="simple",
+            case_ids=suite.case_ids,
+            environment_id=environment_id,
+            concurrency=concurrency,
+            failure_strategy=failure_strategy,
+            variables=variables,
+            status=TestRunStatus.PENDING.value,
+            total_count=len(suite.case_ids),
+            creator_id=current_user.id,
         )
-        db.add(detail)
+        db.add(test_run)
+        db.flush()
 
-    db.commit()
+        # 检查用例是否存在
+        existing_cases = db.query(APITestCase.id).filter(
+            APITestCase.id.in_(suite.case_ids)
+        ).all()
+        existing_case_ids = {c.id for c in existing_cases}
+        missing_case_ids = [cid for cid in suite.case_ids if cid not in existing_case_ids]
 
-    # 发送 Celery 任务
-    from tasks.batch_run_task import batch_run_task
-    batch_run_task.delay(test_run.id)
+        if missing_case_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"以下用例已被删除: {missing_case_ids}，请重新创建任务配置"
+            )
+
+        # 创建执行明细（附带用例快照）
+        case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(suite.case_ids)).all()}
+        for order, case_id in enumerate(suite.case_ids, start=1):
+            case = case_snapshot.get(case_id)
+            detail = TestRunDetail(
+                test_run_id=test_run.id,
+                case_id=case_id,
+                case_name=case.name if case else None,
+                case_number=case.case_number if case else None,
+                execution_order=order,
+                status=TestRunDetailStatus.PENDING.value,
+            )
+            db.add(detail)
+
+        db.commit()
+
+        # 发送批量执行任务
+        from tasks.batch_run_task import batch_run_task
+        batch_run_task.delay(test_run.id)
 
     return {"id": test_run.id, "message": "执行任务已创建"}
 
@@ -287,6 +357,7 @@ def _build_suite_info(suite: TestSuite, db: Session) -> TestSuiteInfo:
         project_id=suite.project_id,
         name=suite.name,
         description=suite.description,
+        config_mode=suite.config_mode or "simple",
         case_ids=suite.case_ids or [],
         case_count=len(suite.case_ids or []),
         environment_id=suite.environment_id,

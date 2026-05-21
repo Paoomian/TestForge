@@ -53,6 +53,8 @@ class BatchRunCreate(BaseModel):
 class BatchRunDetailSummary(BaseModel):
     """用例执行结果摘要（列表展示）"""
     id: int
+    node_id: Optional[int] = None
+    node_type: str = "api_call"
     case_id: Optional[int] = None
     case_name: Optional[str] = None
     case_number: Optional[str] = None
@@ -71,6 +73,8 @@ class BatchRunDetailFull(BaseModel):
     """用例执行完整详情"""
     id: int
     test_run_id: int
+    node_id: Optional[int] = None
+    node_type: str = "api_call"
     case_id: Optional[int] = None
     case_name: Optional[str] = None
     case_number: Optional[str] = None
@@ -118,6 +122,7 @@ class BatchRunInfo(BaseModel):
     project_id: int
     name: str
     status: str
+    config_mode: str = "simple"
     case_ids: list[int]
     environment_id: Optional[int] = None
     environment_name: Optional[str] = None

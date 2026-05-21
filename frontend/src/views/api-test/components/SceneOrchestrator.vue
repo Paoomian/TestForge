@@ -30,6 +30,7 @@
           <SceneNodeCard
             :node="node"
             :cases="cases"
+            :nodes="nodes"
             @update="updateNode(index, $event)"
             @remove="removeNode(index)"
           />

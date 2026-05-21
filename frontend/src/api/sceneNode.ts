@@ -105,7 +105,6 @@ export const batchSortSceneNodes = (suiteId: number, nodeIds: number[]) => {
   return request({
     url: '/scene-nodes/batch-sort',
     method: 'put',
-    params: { suite_id: suiteId },
-    data: nodeIds
+    data: { suite_id: suiteId, node_ids: nodeIds }
   })
 }

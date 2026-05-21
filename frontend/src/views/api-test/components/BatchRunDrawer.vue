@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    :width="480"
+    :width="600"
     :visible="visible"
     title="批量执行配置"
     @update:visible="$emit('update:visible', $event)"
@@ -28,7 +28,7 @@
           >
             <icon-drag-dot-vertical class="drag-handle" />
             <span class="case-order">{{ index + 1 }}</span>
-            <span class="case-name">{{ item.case_number || item.name }}</span>
+            <span class="case-name" :title="item.name">{{ item.name }}</span>
             <a-tag size="small" :color="getMethodColor(item.method)">{{ item.method }}</a-tag>
           </div>
         </div>

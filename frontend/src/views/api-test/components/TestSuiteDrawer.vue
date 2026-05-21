@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    :width="720"
+    :width="900"
     :visible="visible"
     :title="isEdit ? '编辑任务配置' : '新建任务配置'"
     @update:visible="$emit('update:visible', $event)"
@@ -148,6 +148,7 @@ import { getProjects } from '@/api/project'
 import { getTestCases } from '@/api/apiTestCase'
 import { getEnvironments } from '@/api/environment'
 import { createTestSuite, updateTestSuite, getTestSuite } from '@/api/testSuite'
+import { getSceneNodes, createSceneNode, updateSceneNode, deleteSceneNode, batchSortSceneNodes } from '@/api/sceneNode'
 import type { TestSuiteListItem } from '@/api/testSuite'
 import type { APITestCase, Environment } from '@/api/apiTestCase'
 import type { SceneNodeItem } from '@/api/sceneNode'
@@ -281,6 +282,63 @@ const handleRemoveCase = (caseId: number) => {
   form.case_ids = form.case_ids.filter(id => id !== caseId)
 }
 
+// 保存场景节点
+const saveSceneNodes = async (suiteId: number) => {
+  try {
+    // 获取现有节点
+    const existingNodes = await getSceneNodes(suiteId)
+    const existingIds = new Set(existingNodes.map(n => n.id))
+    const currentIds = new Set(sceneNodes.value.filter(n => n.id).map(n => n.id))
+
+    // 删除不再存在的节点
+    for (const node of existingNodes) {
+      if (!currentIds.has(node.id)) {
+        await deleteSceneNode(node.id)
+      }
+    }
+
+    // 创建或更新节点
+    const nodeIds: number[] = []
+    for (const node of sceneNodes.value) {
+      const nodeData = {
+        suite_id: suiteId,
+        node_type: node.node_type,
+        name: node.name,
+        enabled: node.enabled,
+        sort_order: node.sort_order,
+        case_id: node.case_id,
+        condition_variable: node.condition_variable,
+        condition_operator: node.condition_operator,
+        condition_value: node.condition_value,
+        true_branch: node.true_branch,
+        false_branch: node.false_branch,
+        wait_seconds: node.wait_seconds,
+        assign_variable: node.assign_variable,
+        assign_value: node.assign_value,
+        assign_source: node.assign_source
+      }
+
+      if (node.id && existingIds.has(node.id)) {
+        // 更新现有节点
+        await updateSceneNode(node.id, nodeData)
+        nodeIds.push(node.id)
+      } else {
+        // 创建新节点
+        const created = await createSceneNode(nodeData)
+        nodeIds.push(created.id)
+      }
+    }
+
+    // 批量排序
+    if (nodeIds.length > 0) {
+      await batchSortSceneNodes(suiteId, nodeIds)
+    }
+  } catch (e) {
+    console.error('保存场景节点失败:', e)
+    Message.warning('场景节点保存失败，请重试')
+  }
+}
+
 const getMethodColor = (method: string) => {
   const colors: Record<string, string> = { GET: 'blue', POST: 'green', PUT: 'orange', DELETE: 'red', PATCH: 'purple' }
   return colors[method] || 'gray'
@@ -317,18 +375,16 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
-    // 场景编排模式下，从节点中提取case_ids
-    let submitCaseIds = form.case_ids
-    if (configMode.value === 'orchestration') {
-      submitCaseIds = sceneNodes.value
-        .filter(n => n.node_type === 'api_call' && n.case_id)
-        .map(n => n.case_id as number)
-    }
+    // 简单模式提交 case_ids，编排模式提交空数组（节点通过 scene-nodes API 保存）
+    const submitCaseIds = configMode.value === 'simple' ? form.case_ids : []
+
+    let suiteId: number
 
     if (isEdit.value && props.editData) {
       await updateTestSuite(props.editData.id, {
         name: form.name,
         description: form.description,
+        config_mode: configMode.value,
         case_ids: submitCaseIds,
         environment_id: form.environment_id,
         concurrency: form.concurrency,
@@ -336,12 +392,14 @@ const handleSubmit = async () => {
         tags: form.tags,
         variables: form.variables
       })
+      suiteId = props.editData.id
       Message.success('更新成功')
     } else {
-      await createTestSuite({
-        project_id: form.project_id,
+      const result = await createTestSuite({
+        project_id: form.project_id!,
         name: form.name,
         description: form.description,
+        config_mode: configMode.value,
         case_ids: submitCaseIds,
         environment_id: form.environment_id,
         concurrency: form.concurrency,
@@ -349,8 +407,15 @@ const handleSubmit = async () => {
         tags: form.tags,
         variables: form.variables
       })
+      suiteId = result.id
       Message.success('创建成功')
     }
+
+    // 保存场景节点
+    if (configMode.value === 'orchestration') {
+      await saveSceneNodes(suiteId)
+    }
+
     emit('update:visible', false)
     emit('success')
   } catch (e: any) {
@@ -383,9 +448,14 @@ watch(() => props.visible, async (val) => {
         await loadCases(detail.project_id)
         await loadEnvironments(detail.project_id)
 
-        // 判断使用哪种模式（有场景节点则切换到编排模式）
-        if (detail.case_ids.length === 0 && sceneNodes.value.length > 0) {
-          configMode.value = 'orchestration'
+        // 恢复配置模式
+        configMode.value = (detail.config_mode as 'simple' | 'orchestration') || 'simple'
+
+        // 编排模式下加载场景节点
+        if (configMode.value === 'orchestration') {
+          sceneNodes.value = await getSceneNodes(detail.id)
+        } else {
+          sceneNodes.value = []
         }
       } catch (e) {
         Message.error('加载任务详情失败')

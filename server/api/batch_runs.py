@@ -174,9 +174,11 @@ async def get_detail(
     return BatchRunDetailFull(
         id=detail.id,
         test_run_id=detail.test_run_id,
+        node_id=detail.node_id,
+        node_type=detail.node_type or "api_call",
         case_id=detail.case_id,
-        case_name=case.name if case else None,
-        case_number=case.case_number if case else None,
+        case_name=detail.case_name or (case.name if case else None),
+        case_number=detail.case_number or (case.case_number if case else None),
         execution_order=detail.execution_order,
         status=detail.status or "pending",
         request_snapshot=detail.request_snapshot,
@@ -277,9 +279,9 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
         TestRunDetail.test_run_id == run.id
     ).order_by(TestRunDetail.execution_order).all()
 
-    # 获取用例名称
-    case_ids = [d.case_id for d in details]
-    cases = db.query(APITestCase).filter(APITestCase.id.in_(case_ids)).all()
+    # 获取用例名称（过滤掉 None）
+    case_ids = [d.case_id for d in details if d.case_id]
+    cases = db.query(APITestCase).filter(APITestCase.id.in_(case_ids)).all() if case_ids else []
     case_map = {c.id: c for c in cases}
 
     # 获取环境名称
@@ -314,6 +316,8 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
 
         detail_summaries.append(BatchRunDetailSummary(
             id=d.id,
+            node_id=d.node_id,
+            node_type=d.node_type or "api_call",
             case_id=d.case_id,
             case_name=d.case_name or (case.name if case else None),
             case_number=d.case_number or (case.case_number if case else None),
@@ -335,6 +339,7 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
         project_id=run.project_id,
         name=run.name,
         status=run.status or "pending",
+        config_mode=run.config_mode or "simple",
         case_ids=run.case_ids or [],
         environment_id=run.environment_id,
         environment_name=environment_name,

@@ -8,6 +8,7 @@ class TestSuiteCreate(BaseModel):
     project_id: int
     name: str
     description: Optional[str] = None
+    config_mode: str = "simple"  # simple / orchestration
     case_ids: list[int] = []
     environment_id: Optional[int] = None
     concurrency: int = 1
@@ -20,6 +21,7 @@ class TestSuiteUpdate(BaseModel):
     """更新任务配置"""
     name: Optional[str] = None
     description: Optional[str] = None
+    config_mode: Optional[str] = None
     case_ids: Optional[list[int]] = None
     environment_id: Optional[int] = None
     concurrency: Optional[int] = None
@@ -34,6 +36,7 @@ class TestSuiteInfo(BaseModel):
     project_id: int
     name: str
     description: Optional[str] = None
+    config_mode: str = "simple"
     case_ids: list[int] = []
     case_count: int = 0  # 用例数量
     environment_id: Optional[int] = None
@@ -57,6 +60,7 @@ class TestSuiteList(BaseModel):
     project_name: Optional[str] = None
     name: str
     description: Optional[str] = None
+    config_mode: str = "simple"
     case_count: int = 0
     environment_name: Optional[str] = None
     concurrency: int = 1

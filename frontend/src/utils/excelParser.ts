@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 // 类型定义
 export interface ParsedHeader {
@@ -31,6 +32,14 @@ export interface ParsedAssertion {
   description: string
 }
 
+export interface ParsedExtract {
+  name: string
+  source: string
+  expression: string
+  default_value: string
+  description: string
+}
+
 export interface ParsedCase {
   name: string
   method: string
@@ -44,6 +53,8 @@ export interface ParsedCase {
   headers_json?: string
   params_json?: string
   assertions_json?: string
+  extracts_json?: string
+  extracts: ParsedExtract[]
   remark?: string
   headers: ParsedHeader[]
   query_params: ParsedQueryParam[]
@@ -74,6 +85,7 @@ const COLUMN_MAP: Record<string, keyof ParsedCase> = {
   '请求头': 'headers_json',
   '查询参数': 'params_json',
   '断言': 'assertions_json',
+  '数据提取': 'extracts_json',
   '备注': 'remark',
 }
 
@@ -142,6 +154,24 @@ export function parseAssertions(jsonStr?: string): ParsedAssertion[] {
 }
 
 /**
+ * 解析数据提取 JSON 数组
+ * 格式: [{"name":"token","source":"jsonpath","expression":"$.data.token","default_value":"","description":"提取token"}]
+ */
+export function parseExtracts(jsonStr?: string): ParsedExtract[] {
+  if (!jsonStr) return []
+  const arr = safeParseJson(jsonStr)
+  if (!Array.isArray(arr)) return []
+
+  return arr.map((item: any) => ({
+    name: String(item.name || '').trim(),
+    source: String(item.source || 'jsonpath').trim().toLowerCase(),
+    expression: String(item.expression || '').trim(),
+    default_value: String(item.default_value || item.default || '').trim(),
+    description: String(item.description || '').trim(),
+  }))
+}
+
+/**
  * 校验单条用例
  */
 function validateCase(parsed: ParsedCase): string[] {
@@ -205,6 +235,19 @@ function validateCase(parsed: ParsedCase): string[] {
     }
   })
 
+  // 校验数据提取
+  parsed.extracts.forEach((extract, index) => {
+    if (!extract.name) {
+      errors.push(`提取${index + 1}变量名不能为空`)
+    }
+    if (extract.source && !['jsonpath', 'regex', 'header'].includes(extract.source)) {
+      errors.push(`提取${index + 1}来源无效：${extract.source}`)
+    }
+    if (!extract.expression) {
+      errors.push(`提取${index + 1}表达式不能为空`)
+    }
+  })
+
   return errors
 }
 
@@ -248,6 +291,8 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
             headers_json: '',
             params_json: '',
             assertions_json: '',
+            extracts_json: '',
+            extracts: [],
             remark: '',
             headers: [],
             query_params: [],
@@ -298,6 +343,7 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
           parsed.headers = parseHeaders(parsed.headers_json)
           parsed.query_params = parseQueryParams(parsed.params_json)
           parsed.assertions = parseAssertions(parsed.assertions_json)
+          parsed.extracts = parseExtracts(parsed.extracts_json)
 
           // 校验
           parsed._errors = validateCase(parsed)
@@ -305,7 +351,15 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
           return parsed
         })
 
-        resolve(parsedCases)
+        // 过滤掉空行（用例名称为空的行）
+        const filteredCases = parsedCases.filter(c => c.name.trim() !== '')
+
+        if (filteredCases.length === 0) {
+          reject(new Error('Excel 文件没有有效数据行'))
+          return
+        }
+
+        resolve(filteredCases)
       } catch (error) {
         reject(new Error('Excel 文件解析失败：' + (error as Error).message))
       }
@@ -320,28 +374,68 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
 }
 
 /**
- * 生成 Excel 模板
+ * 生成 Excel 模板（使用 exceljs 支持样式）
  */
-export function generateExcelTemplate(): Blob {
-  // 表头
+export async function generateExcelTemplate(): Promise<Blob> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'TestForge'
+  workbook.created = new Date()
+
+  // ========== 用例模板 Sheet ==========
+  const ws = workbook.addWorksheet('用例模板', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  })
+
+  // 表头定义
   const headers = [
     '用例名称', '请求方法', '请求URL', '所属模块', '优先级',
     '描述', '前置条件', 'Body类型', 'Body内容',
-    '请求头', '查询参数', '断言', '备注',
+    '请求头', '查询参数', '断言', '数据提取', '备注',
   ]
 
-  // 示例数据行
+  // 列宽配置
+  ws.columns = [
+    { width: 16 }, { width: 10 }, { width: 30 }, { width: 12 }, { width: 8 },
+    { width: 20 }, { width: 18 }, { width: 14 }, { width: 45 },
+    { width: 45 }, { width: 35 }, { width: 80 }, { width: 80 }, { width: 18 },
+  ]
+
+  // 添加表头行
+  const headerRow = ws.addRow(headers)
+
+  // 表头样式：蓝色背景 + 白色字体 + 加粗 + 居中
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4472C4' },
+    }
+    cell.font = {
+      bold: true,
+      color: { argb: 'FFFFFFFF' },
+      size: 12,
+    }
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
+    cell.border = {
+      top: { style: 'thin' },
+      bottom: { style: 'thin' },
+      left: { style: 'thin' },
+      right: { style: 'thin' },
+    }
+  })
+  headerRow.height = 24
+
+  // 靠左对齐的列索引（1-based）：Body内容(9)、请求头(10)、查询参数(11)、断言(12)、数据提取(13)
+  const leftAlignCols = [9, 10, 11, 12, 13]
+
+  // 示例数据
   const exampleRows = [
-    // 示例1：POST请求 + JSON Body + 多种断言
     [
-      '用户登录',
-      'POST',
-      '/api/v1/auth/login',
-      '认证模块',
-      'P0',
-      '用户登录接口',
-      '无',
-      'raw-json',
+      '用户登录', 'POST', '/api/v1/auth/login', '认证模块', 'P0',
+      '用户登录接口', '无', 'raw-json',
       '{"username":"admin","password":"123456"}',
       '{"Content-Type":"application/json","Authorization":"Bearer token123"}',
       '',
@@ -353,19 +447,15 @@ export function generateExcelTemplate(): Blob {
         { type: 'header', field: 'Content-Type', operator: 'contains', expected: 'application/json', description: '响应头包含JSON类型' },
         { type: 'body_contains', operator: 'contains', expected: 'success', description: '响应体包含success' },
       ]),
+      JSON.stringify([
+        { name: 'token', source: 'jsonpath', expression: '$.data.token', default_value: '', description: '提取登录token' },
+        { name: 'userId', source: 'jsonpath', expression: '$.data.user.id', default_value: '0', description: '提取用户ID' },
+      ]),
       '首次登录需要验证码',
     ],
-    // 示例2：GET请求 + 查询参数
     [
-      '获取用户列表',
-      'GET',
-      '/api/v1/users',
-      '用户模块',
-      'P1',
-      '分页查询用户列表',
-      '已登录',
-      'none',
-      '',
+      '获取用户列表', 'GET', '/api/v1/users', '用户模块', 'P1',
+      '分页查询用户列表', '已登录', 'none', '',
       '{"Authorization":"Bearer {{token}}"}',
       '{"page":"1","size":"10","keyword":"test"}',
       JSON.stringify([
@@ -373,69 +463,81 @@ export function generateExcelTemplate(): Blob {
         { type: 'jsonpath', field: '$.data.list', operator: 'exists', expected: '' },
         { type: 'jsonpath', field: '$.data.total', operator: 'greater_than', expected: '0' },
       ]),
+      JSON.stringify([
+        { name: 'userList', source: 'jsonpath', expression: '$.data.list', default_value: '[]', description: '提取用户列表' },
+        { name: 'total', source: 'jsonpath', expression: '$.data.total', default_value: '0', description: '提取总数' },
+      ]),
       '',
     ],
-    // 示例3：PUT请求 + form-data
     [
-      '上传头像',
-      'PUT',
-      '/api/v1/users/avatar',
-      '用户模块',
-      'P2',
-      '上传用户头像',
-      '已登录',
-      'form-data',
+      '上传头像', 'PUT', '/api/v1/users/avatar', '用户模块', 'P2',
+      '上传用户头像', '已登录', 'form-data',
       '{"file":"@avatar.png","type":"image"}',
-      '{"Authorization":"Bearer {{token}}"}',
-      '',
+      '{"Authorization":"Bearer {{token}}"}', '',
       JSON.stringify([
         { type: 'status_code', operator: 'equals', expected: '200' },
         { type: 'jsonpath', field: '$.data.url', operator: 'regex', expected: 'https?://.*', description: '返回有效的图片URL' },
       ]),
+      JSON.stringify([
+        { name: 'avatarUrl', source: 'jsonpath', expression: '$.data.url', default_value: '', description: '提取头像URL' },
+        { name: 'contentType', source: 'header', expression: 'Content-Type', default_value: 'application/json', description: '提取响应头Content-Type' },
+      ]),
       '支持 jpg/png 格式',
     ],
-    // 示例4：DELETE请求
     [
-      '删除用户',
-      'DELETE',
-      '/api/v1/users/1001',
-      '用户模块',
-      'P1',
-      '删除指定用户',
-      '已登录，用户存在',
-      'none',
-      '',
-      '{"Authorization":"Bearer {{token}}"}',
-      '',
+      '删除用户', 'DELETE', '/api/v1/users/1001', '用户模块', 'P1',
+      '删除指定用户', '已登录，用户存在', 'none', '',
+      '{"Authorization":"Bearer {{token}}"}', '',
       JSON.stringify([
         { type: 'status_code', operator: 'equals', expected: '200' },
         { type: 'jsonpath', field: '$.code', operator: 'not_equals', expected: '-1', description: 'code不等于-1表示未失败' },
+      ]),
+      JSON.stringify([
+        { name: 'deleteMsg', source: 'regex', expression: '"message":"(.*?)"', default_value: '', description: '用正则提取删除提示信息' },
       ]),
       '软删除',
     ],
   ]
 
-  // 创建工作表
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows])
+  // 设置行样式的函数
+  const applyRowStyle = (row: ExcelJS.Row) => {
+    row.eachCell((cell, colNumber) => {
+      cell.alignment = {
+        horizontal: leftAlignCols.includes(colNumber) ? 'left' : 'center',
+        vertical: 'middle',
+        wrapText: true,
+      }
+      cell.border = {
+        top: { style: 'thin' },
+        bottom: { style: 'thin' },
+        left: { style: 'thin' },
+        right: { style: 'thin' },
+      }
+    })
+  }
+
+  // 添加示例数据行并设置样式
+  exampleRows.forEach((rowData) => {
+    const row = ws.addRow(rowData)
+    applyRowStyle(row)
+  })
+
+  // 添加空行（预留20行供用户填写）并设置样式
+  const emptyRow = new Array(headers.length).fill('')
+  for (let i = 0; i < 20; i++) {
+    const row = ws.addRow(emptyRow)
+    applyRowStyle(row)
+  }
+
+  // ========== 填写说明 Sheet ==========
+  const helpWs = workbook.addWorksheet('填写说明')
 
   // 设置列宽
-  ws['!cols'] = [
-    { wch: 16 }, // 用例名称
-    { wch: 10 }, // 请求方法
-    { wch: 30 }, // 请求URL
-    { wch: 12 }, // 所属模块
-    { wch: 8 },  // 优先级
-    { wch: 20 }, // 描述
-    { wch: 18 }, // 前置条件
-    { wch: 14 }, // Body类型
-    { wch: 45 }, // Body内容
-    { wch: 45 }, // 请求头
-    { wch: 35 }, // 查询参数
-    { wch: 80 }, // 断言
-    { wch: 18 }, // 备注
+  helpWs.columns = [
+    { width: 20 }, { width: 8 }, { width: 40 }, { width: 50 },
   ]
 
-  // 添加说明工作表
+  // 帮助数据
   const helpData = [
     ['字段说明'],
     [''],
@@ -452,6 +554,7 @@ export function generateExcelTemplate(): Blob {
     ['请求头', '否', 'JSON对象格式', '{"Content-Type":"application/json"}'],
     ['查询参数', '否', 'JSON对象格式，URL查询参数', '{"page":"1","size":"10"}'],
     ['断言', '否', 'JSON数组格式，详见下方说明', '[{"type":"status_code","operator":"equals","expected":"200"}]'],
+    ['数据提取', '否', 'JSON数组格式，详见数据提取规则', '[{"name":"token","source":"jsonpath","expression":"$.data.token"}]'],
     ['备注', '否', '备注信息', ''],
     [''],
     ['断言规则说明'],
@@ -480,26 +583,74 @@ export function generateExcelTemplate(): Blob {
     ['正文包含断言', '[{"type":"body_contains","operator":"contains","expected":"success"}]'],
     ['字段存在断言', '[{"type":"jsonpath","field":"$.data.token","operator":"exists","expected":""}]'],
     ['正则匹配断言', '[{"type":"jsonpath","field":"$.data.url","operator":"regex","expected":"https?://.*"}]'],
+    [''],
+    ['数据提取规则说明'],
+    [''],
+    ['提取来源(source)', '说明', 'expression示例', '说明'],
+    ['jsonpath', 'JSONPath表达式提取', '$.data.token', '提取响应JSON中的token字段'],
+    ['regex', '正则表达式提取', '"token":"(.*?)"', '用正则捕获组提取'],
+    ['header', '响应头提取', 'Content-Type', '提取响应头字段值'],
+    [''],
+    ['数据提取示例：'],
+    ['提取token', '[{"name":"token","source":"jsonpath","expression":"$.data.token","description":"提取登录token"}]'],
+    ['正则提取', '[{"name":"code","source":"regex","expression":"\\"code\\":(\\\\d+)","description":"提取状态码"}]'],
+    ['响应头提取', '[{"name":"contentType","source":"header","expression":"Content-Type","description":"提取Content-Type"}]'],
+    ['多字段提取', '[{"name":"token","source":"jsonpath","expression":"$.data.token"},{"name":"userId","source":"jsonpath","expression":"$.data.user.id"}]'],
   ]
 
-  const helpWs = XLSX.utils.aoa_to_sheet(helpData)
-  helpWs['!cols'] = [
-    { wch: 20 },
-    { wch: 8 },
-    { wch: 40 },
-    { wch: 50 },
+  // 添加数据行
+  helpData.forEach((rowData) => {
+    helpWs.addRow(rowData)
+  })
+
+  // 合并标题单元格
+  helpWs.mergeCells('A1:D1')
+  helpWs.mergeCells('A19:D19')
+  helpWs.mergeCells('A40:D40')
+
+  // 设置标题样式
+  const titleRows = [1, 19, 40]
+  titleRows.forEach((rowNum) => {
+    const row = helpWs.getRow(rowNum)
+    row.getCell(1).font = { bold: true, size: 14 }
+  })
+
+  // 为表格添加边框样式
+  // 字段说明表格: 第4-18行（表头第4行 + 数据第5-18行）
+  // 断言类型表格: 第21-26行（表头第21行 + 数据第22-26行）
+  // 比较方式表格: 第29-35行（表头第29行 + 数据第30-35行）
+  // 提取来源表格: 第41-44行（表头第41行 + 数据第42-44行）
+  const tableRanges = [
+    { start: 4, end: 18 },
+    { start: 21, end: 26 },
+    { start: 29, end: 35 },
+    { start: 41, end: 44 },
   ]
 
-  // 合并说明表的标题单元格
-  helpWs['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-    { s: { r: 17, c: 0 }, e: { r: 17, c: 3 } },
-  ]
+  tableRanges.forEach(({ start, end }) => {
+    for (let rowNum = start; rowNum <= end; rowNum++) {
+      const row = helpWs.getRow(rowNum)
+      // 确保行有数据
+      if (row.hasValues) {
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          if (colNumber <= 4) {
+            cell.border = {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' },
+            }
+            cell.alignment = {
+              vertical: 'middle',
+              wrapText: true,
+            }
+          }
+        })
+      }
+    }
+  })
 
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, '用例模板')
-  XLSX.utils.book_append_sheet(wb, helpWs, '填写说明')
-
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-  return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  // 生成 Blob
+  const buffer = await workbook.xlsx.writeBuffer()
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }

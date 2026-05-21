@@ -14,7 +14,8 @@ class TestSuite(Base):
     description = Column(Text, nullable=True)
 
     # 用例配置
-    case_ids = Column(JSON, default=list)  # 用例ID列表
+    config_mode = Column(String(20), default="simple")  # simple / orchestration
+    case_ids = Column(JSON, default=list)  # 用例ID列表（简单模式）
 
     # 默认执行配置
     environment_id = Column(Integer, ForeignKey("environments.id"), nullable=True)
@@ -34,3 +35,4 @@ class TestSuite(Base):
     project = relationship("Project")
     environment = relationship("Environment")
     creator = relationship("User")
+    scene_nodes = relationship("SceneNode", back_populates="suite", cascade="all, delete-orphan")

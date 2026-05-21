@@ -12,11 +12,13 @@ export interface BatchRunCreate {
 
 export interface CaseDetailSummary {
   id: number
-  case_id: number
+  node_id?: number
+  node_type: string
+  case_id?: number
   case_name?: string
   case_number?: string
   execution_order: number
-  status: 'pending' | 'running' | 'pass' | 'fail' | 'error' | 'skipped'
+  status: 'pending' | 'running' | 'pass' | 'fail' | 'error' | 'skipped' | 'waiting'
   duration_ms: number
   api_duration_ms?: number
   status_code?: number
@@ -28,6 +30,7 @@ export interface BatchRunInfo {
   project_id: number
   name: string
   status: 'pending' | 'running' | 'done' | 'error' | 'cancelled'
+  config_mode: string
   case_ids: number[]
   environment_id?: number
   environment_name?: string
@@ -69,7 +72,9 @@ export interface BatchRunListItem {
 export interface CaseDetailFull {
   id: number
   test_run_id: number
-  case_id: number
+  node_id?: number
+  node_type: string
+  case_id?: number
   case_name?: string
   case_number?: string
   execution_order: number

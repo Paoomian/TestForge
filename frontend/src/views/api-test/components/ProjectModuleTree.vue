@@ -46,13 +46,17 @@
         </a-tooltip>
       </div>
     </div>
-    <a-tree
-      :data="treeData"
-      :show-line="true"
-      :default-expand-all="false"
-      :selected-keys="selectedKeys"
-      @select="handleSelect"
-    />
+    <a-spin :loading="loading" style="width: 100%">
+      <a-empty v-if="!loading && treeData.length === 0" description="暂无数据" style="margin-top: 40px" />
+      <a-tree
+        v-else
+        :data="treeData"
+        :show-line="true"
+        :default-expand-all="false"
+        :selected-keys="selectedKeys"
+        @select="handleSelect"
+      />
+    </a-spin>
 
     <!-- 新建模块弹窗 -->
     <a-modal
@@ -103,6 +107,8 @@ import { getProjects } from '@/api/project'
 import { getModuleTree, createModule, deleteModule, renameModule } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
 import type { ModuleTree } from '@/api/apiTestCase'
+
+const loading = ref(false)
 
 interface TreeNode {
   key: string
@@ -334,11 +340,19 @@ const handleConfirmRenameModule = async () => {
 }
 
 const loadData = async () => {
+  loading.value = true
   try {
-    projects.value = await getProjects()
-    moduleTree.value = await getModuleTree()
+    // 并行请求，提升加载速度
+    const [projectsData, moduleTreeData] = await Promise.all([
+      getProjects(),
+      getModuleTree()
+    ])
+    projects.value = projectsData
+    moduleTree.value = moduleTreeData
   } catch (error) {
     console.error('Failed to load tree data:', error)
+  } finally {
+    loading.value = false
   }
 }
 

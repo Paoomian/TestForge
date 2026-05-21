@@ -844,8 +844,8 @@ const handleFileChange = (fileList: any) => {
   }
 }
 
-const downloadTemplate = () => {
-  const blob = generateExcelTemplate()
+const downloadTemplate = async () => {
+  const blob = await generateExcelTemplate()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

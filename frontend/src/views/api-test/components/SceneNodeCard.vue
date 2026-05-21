@@ -49,6 +49,7 @@
       <ConditionNodeForm
         v-else-if="node.node_type === 'condition'"
         :node="node"
+        :nodes="nodes"
         @update="$emit('update', $event)"
       />
 
@@ -86,6 +87,7 @@ const nodeTypeLabels: Record<SceneNodeType, string> = {
 defineProps<{
   node: SceneNodeItem
   cases: APITestCase[]
+  nodes: SceneNodeItem[]
 }>()
 
 const emit = defineEmits<{

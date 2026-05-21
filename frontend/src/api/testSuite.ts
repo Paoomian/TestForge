@@ -6,6 +6,7 @@ export interface TestSuiteCreate {
   project_id: number
   name: string
   description?: string
+  config_mode?: string
   case_ids: number[]
   environment_id?: number
   concurrency?: 1 | 3 | 5 | 10
@@ -17,6 +18,7 @@ export interface TestSuiteCreate {
 export interface TestSuiteUpdate {
   name?: string
   description?: string
+  config_mode?: string
   case_ids?: number[]
   environment_id?: number
   concurrency?: 1 | 3 | 5 | 10
@@ -30,6 +32,7 @@ export interface TestSuiteInfo {
   project_id: number
   name: string
   description?: string
+  config_mode: string
   case_ids: number[]
   case_count: number
   environment_id?: number
@@ -49,6 +52,7 @@ export interface TestSuiteListItem {
   project_name?: string
   name: string
   description?: string
+  config_mode: string
   case_count: number
   environment_name?: string
   concurrency: number

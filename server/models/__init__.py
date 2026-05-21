@@ -15,6 +15,7 @@ from .test_case_assertion import TestCaseAssertion
 from .test_case_extract import TestCaseExtract
 from .test_case_auth import TestCaseAuth
 from .test_case_data_rule import TestCaseDataRule
+from .scene_node import SceneNode, SceneNodeType, ConditionOperator, AssignSource
 
 __all__ = [
     "User",
@@ -39,4 +40,8 @@ __all__ = [
     "TestCaseExtract",
     "TestCaseAuth",
     "TestCaseDataRule",
+    "SceneNode",
+    "SceneNodeType",
+    "ConditionOperator",
+    "AssignSource",
 ]

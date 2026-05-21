@@ -43,41 +43,83 @@
       </a-col>
     </a-row>
 
-    <a-divider style="margin: 12px 0;">分支说明</a-divider>
+    <a-divider style="margin: 12px 0;">分支跳转</a-divider>
 
-    <div class="branch-info">
-      <div class="branch-item branch-true">
-        <div class="branch-icon">
-          <icon-check-circle />
-        </div>
-        <div class="branch-content">
-          <div class="branch-label">条件为真时</div>
-          <div class="branch-desc">执行"真"分支中的节点（暂不支持可视化配置分支，执行时按顺序执行后续节点）</div>
-        </div>
-      </div>
-      <div class="branch-item branch-false">
-        <div class="branch-icon">
-          <icon-close-circle />
-        </div>
-        <div class="branch-content">
-          <div class="branch-label">条件为假时</div>
-          <div class="branch-desc">跳过后续节点或执行"假"分支（暂不支持可视化配置分支）</div>
-        </div>
-      </div>
+    <div class="branch-config">
+      <a-form-item label="为真时" label-col-flex="80px">
+        <a-select
+          :model-value="trueBranchTarget"
+          placeholder="继续下一个节点"
+          allow-clear
+          @update:model-value="onTrueBranchChange"
+        >
+          <a-option
+            v-for="n in otherNodes"
+            :key="n.id || n.sort_order"
+            :value="n.id || n.sort_order"
+          >
+            {{ n.sort_order + 1 }}. {{ n.name }}
+          </a-option>
+        </a-select>
+      </a-form-item>
+
+      <a-form-item label="为假时" label-col-flex="80px">
+        <a-select
+          :model-value="falseBranchTarget"
+          placeholder="继续下一个节点"
+          allow-clear
+          @update:model-value="onFalseBranchChange"
+        >
+          <a-option
+            v-for="n in otherNodes"
+            :key="n.id || n.sort_order"
+            :value="n.id || n.sort_order"
+          >
+            {{ n.sort_order + 1 }}. {{ n.name }}
+          </a-option>
+        </a-select>
+      </a-form-item>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { SceneNodeItem } from '@/api/sceneNode'
 
-defineProps<{
+const props = defineProps<{
   node: SceneNodeItem
+  nodes: SceneNodeItem[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'update', data: Partial<SceneNodeItem>): void
 }>()
+
+// 过滤掉当前节点
+const otherNodes = computed(() =>
+  props.nodes.filter(n => n !== props.node)
+)
+
+// 当前真分支目标
+const trueBranchTarget = computed(() => {
+  const branches = props.node.true_branch || []
+  return branches.length > 0 ? branches[0] : undefined
+})
+
+// 当前假分支目标
+const falseBranchTarget = computed(() => {
+  const branches = props.node.false_branch || []
+  return branches.length > 0 ? branches[0] : undefined
+})
+
+function onTrueBranchChange(val: number | undefined) {
+  emit('update', { true_branch: val ? [val] : [] })
+}
+
+function onFalseBranchChange(val: number | undefined) {
+  emit('update', { false_branch: val ? [val] : [] })
+}
 </script>
 
 <style scoped>
@@ -85,46 +127,9 @@ defineEmits<{
   width: 100%;
 }
 
-.branch-info {
+.branch-config {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.branch-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-small);
-  background: var(--color-fill-1);
-}
-
-.branch-true .branch-icon {
-  color: #00b42a;
-}
-
-.branch-false .branch-icon {
-  color: #f53f3f;
-}
-
-.branch-icon {
-  font-size: 16px;
-  margin-top: 2px;
-}
-
-.branch-content {
-  flex: 1;
-}
-
-.branch-label {
-  font-weight: 500;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.branch-desc {
-  font-size: 12px;
-  color: var(--color-text-3);
+  gap: 4px;
 }
 </style>

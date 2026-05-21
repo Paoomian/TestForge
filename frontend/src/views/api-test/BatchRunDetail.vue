@@ -78,6 +78,12 @@
             :pagination="false"
             :loading="tableLoading"
           >
+            <template #node_type="{ record }">
+              <a-tag :color="getNodeTypeColor(record.node_type)" size="small">
+                {{ getNodeTypeText(record.node_type) }}
+              </a-tag>
+            </template>
+
             <template #status="{ record }">
               <a-tag :color="getDetailStatusColor(record.status)" size="small">
                 {{ getDetailStatusText(record.status) }}
@@ -141,15 +147,16 @@ const detailDrawerVisible = ref(false)
 const selectedDetailId = ref(0)
 
 const detailColumns = [
-  { title: '序号', dataIndex: 'execution_order', width: 80 },
-  { title: '用例编号', dataIndex: 'case_number', width: 150, ellipsis: true },
-  { title: '用例名称', dataIndex: 'case_name', width: 200, ellipsis: true },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
-  { title: '状态码', dataIndex: 'status_code', width: 80 },
-  { title: '接口耗时', dataIndex: 'api_duration_ms', slotName: 'api_duration_ms', width: 100 },
-  { title: '总耗时', dataIndex: 'duration_ms', slotName: 'duration_ms', width: 100 },
-  { title: '错误信息', dataIndex: 'error_message', width: 200, ellipsis: true },
-  { title: '操作', slotName: 'actions', width: 100, fixed: 'right' as const }
+  { title: '序号', dataIndex: 'execution_order', width: 60 },
+  { title: '类型', dataIndex: 'node_type', slotName: 'node_type', width: 100 },
+  { title: '用例编号', dataIndex: 'case_number', width: 130, ellipsis: true },
+  { title: '用例名称', dataIndex: 'case_name', width: 180, ellipsis: true },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 80 },
+  { title: '状态码', dataIndex: 'status_code', width: 70 },
+  { title: '接口耗时', dataIndex: 'api_duration_ms', slotName: 'api_duration_ms', width: 90 },
+  { title: '总耗时', dataIndex: 'duration_ms', slotName: 'duration_ms', width: 90 },
+  { title: '错误信息', dataIndex: 'error_message', width: 180, ellipsis: true },
+  { title: '操作', slotName: 'actions', width: 80, fixed: 'right' as const }
 ]
 
 const getStatusColor = (status: string) => {
@@ -166,16 +173,30 @@ const getStatusText = (status: string) => {
   return texts[status] || status
 }
 
+const getNodeTypeColor = (nodeType: string) => {
+  const colors: Record<string, string> = {
+    api_call: 'blue', condition: 'orange', wait: 'gray', data_assign: 'green'
+  }
+  return colors[nodeType] || 'gray'
+}
+
+const getNodeTypeText = (nodeType: string) => {
+  const texts: Record<string, string> = {
+    api_call: '接口调用', condition: '条件判断', wait: '等待延时', data_assign: '数据赋值'
+  }
+  return texts[nodeType] || nodeType
+}
+
 const getDetailStatusColor = (status: string) => {
   const colors: Record<string, string> = {
-    pending: 'gray', running: 'blue', pass: 'green', fail: 'red', error: 'orange', skipped: 'gray'
+    pending: 'gray', running: 'blue', pass: 'green', fail: 'red', error: 'orange', skipped: 'gray', waiting: 'blue'
   }
   return colors[status] || 'gray'
 }
 
 const getDetailStatusText = (status: string) => {
   const texts: Record<string, string> = {
-    pending: '待执行', running: '执行中', pass: '通过', fail: '失败', error: '错误', skipped: '已跳过'
+    pending: '待执行', running: '执行中', pass: '通过', fail: '失败', error: '错误', skipped: '已跳过', waiting: '等待中'
   }
   return texts[status] || status
 }
