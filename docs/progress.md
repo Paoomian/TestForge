@@ -45,6 +45,7 @@
 - [x] 5种规则类型：extract/static/generate/transform/conditional
 - [x] 前端DataRuleCard + DataRuleEditor组件
 - [x] 批量执行中数据规则变量传递
+- [x] 合并test_case_extracts到test_case_data_rules（消除冗余表）
 
 ### Excel批量导入
 - [x] 后端Schema定义（ExcelImportRequest/ExcelCaseItem/ExcelImportResult）
@@ -72,6 +73,39 @@
 - [x] 后端场景执行引擎SceneRunner（2026-05-22完成）
 - [x] 条件节点分支跳转配置（2026-05-22完成）
 - [x] 任务详情页适配节点类型展示（2026-05-22完成）
+- [x] UI重构：左侧流程图+右侧属性面板布局（2026-05-22完成）
+- [x] 条件分支可视化：Y形分叉+真/假双列展示（2026-05-22完成）
+- [x] 编排抽屉近全屏宽度（2026-05-22完成）
+- [x] 任务记录列表支持简单/编排模式分类筛选（2026-05-22完成）
+- [x] 编排模式专属报告页：流程图+节点详情面板（2026-05-22完成）
+- [x] 编排模式通过率修正：skipped不计入分母（2026-05-22完成）
+- [x] 条件分支流程图Y形可视化+活跃/非活跃分支区分（2026-05-22完成）
+- [x] 节点详情面板：请求快照/响应/断言/变量提取/脚本输出（2026-05-22完成）
+
+### 开发工具页面
+- [x] ToolLayout共享布局组件（输入/输出分栏）
+- [x] ToolsPage主页面（左侧卡片列表 + 右侧工具内容）
+- [x] 路由配置 + 侧边栏菜单
+- [x] 数据格式化：JSON/XML/YAML格式化（3个工具）
+- [x] 编解码：Base64/URL/HTML/Unicode编解码（4个工具）
+- [x] 哈希加密：哈希计算/JWT解析/AES-DES加解密（3个工具）
+- [x] 生成工具：UUID/随机字符串/测试数据/二维码生成（4个工具）
+- [x] 时间转换：时间戳转换/Cron生成器/进制转换（3个工具）
+
+### AI 生成测试用例
+- [x] AI 配置管理（支持多模型和中转站）
+- [x] 文档上传和解析（PRD/Swagger）
+- [x] 测试用例生成功能（功能/接口/边界值/组合）
+- [x] 生成任务管理（异步执行、进度跟踪）
+- [x] 用例编辑和保存到项目
+- [x] Skill（Prompt 模板）可配置系统（2026-05-24）
+- [x] System/User Prompt 合并为单一「Prompt 模板」字段（2026-05-24）
+- [x] 系统自动附加 Pairwise 示例 + backend_ui 示例 + JSON 格式要求（2026-05-24）
+- [x] JSON 解析增强：未转义引号修复 + 截断恢复（2026-05-24）
+- [x] 多项 Bug 修复：retry 回退、cancel 状态、checkbox 全选、外键删除、Excel 双序号、.format() KeyError（2026-05-24）
+- [x] 边界值具体数值要求 + expected_results 数组格式支持（2026-05-24）
+- [x] 技能管理 UI 优化：布局、宽度、textarea 自适应（2026-05-24）
+- [ ] AI 模型对 combination/backend_ui 有系统性盲区，待换更强模型验证（2026-05-24）
 
 ---
 
@@ -86,6 +120,16 @@
 | 批量执行拖拽排序用HTML5原生API | 零依赖实现 |
 | MySQL ENUM改VARCHAR(20) | 避免截断问题 |
 | datetime使用naive模式 | 避免timezone偏移错误 |
+| 迁移脚本合并为upgrade_all.py | 10个独立迁移合并为1个统一脚本，可重复执行 |
+| 场景编排UI用流程图+属性面板 | 分支可视化，编辑空间充足，CSS连线零依赖 |
+| 分支归属用branch_of字段推导 | 前端渲染用，不改后端模型，从true_branch/false_branch反推 |
+| test_case_extracts合并到test_case_data_rules | 消除冗余表，统一用rule_type="extract"表示提取规则 |
+| 编排模式通过率=pass/(pass+fail+error) | skipped是条件跳过的分支，不应计入分母拉低通过率 |
+| 编排任务详情用node_tree替代flat列表 | 通过detail.node_id反查SceneNode.suite_id构建树结构 |
+| batch-delete路由放在/{run_id}之前 | FastAPI按定义顺序匹配，避免"batch-delete"被当作int解析导致422 |
+| Prompt模板合并为单一system_prompt字段 | user_prompt留空由后端自动生成，降低用户配置复杂度 |
+| JSON解析预处理fix_json_quotes | 逐字符状态机修复AI返回的未转义引号，比正则更可靠 |
+| 外键删除前先解除引用 | 删除Skill前将关联Task的skill_id置NULL，避免约束报错 |
 
 ---
 
@@ -167,4 +211,4 @@
 
 ---
 
-**最后更新**: 2026-05-22
+**最后更新**: 2026-05-24（Skill 系统 + Prompt 优化 + 多项 Bug 修复）

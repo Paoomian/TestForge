@@ -99,6 +99,7 @@ class BatchRunList(BaseModel):
     id: int
     name: str
     status: str
+    config_mode: str = "simple"
     concurrency: int
     failure_strategy: str
     total_count: int
@@ -114,6 +115,18 @@ class BatchRunList(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class NodeTreeItem(BaseModel):
+    """编排节点树节点"""
+    node_id: int
+    node_type: str
+    name: str
+    status: str = "pending"
+    detail_id: Optional[int] = None
+    active_branch: Optional[str] = None  # condition 节点: "true" / "false"
+    true_branch: list = []  # 递归类型，运行时填充
+    false_branch: list = []  # 递归类型，运行时填充
 
 
 class BatchRunInfo(BaseModel):
@@ -141,6 +154,7 @@ class BatchRunInfo(BaseModel):
     creator_id: Optional[int] = None
     created_at: datetime
     details: list[BatchRunDetailSummary] = []
+    node_tree: list[NodeTreeItem] = []
 
     class Config:
         from_attributes = True

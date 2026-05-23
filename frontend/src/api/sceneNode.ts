@@ -32,6 +32,9 @@ export interface SceneNodeItem {
   assign_variable?: string
   assign_value?: string
   assign_source: AssignSource
+  // 分支归属（前端渲染用，不存后端）
+  branch_of?: number
+  branch_type?: 'true' | 'false'
 }
 
 // 创建请求

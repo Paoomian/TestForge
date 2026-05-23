@@ -52,9 +52,14 @@ class DataRuleService:
                     result[name] = str(value)
                 elif default_value:
                     result[name] = default_value
+                else:
+                    # 提取失败且无默认值，记录空字符串以便前端展示
+                    result[name] = ''
             except Exception:
                 if default_value:
                     result[name] = default_value
+                else:
+                    result[name] = ''
 
         return result
 

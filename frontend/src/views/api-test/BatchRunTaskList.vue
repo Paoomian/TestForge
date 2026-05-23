@@ -2,6 +2,13 @@
   <div class="batch-run-task-list">
     <!-- 搜索栏 -->
     <a-card :bordered="false" style="margin-bottom: 16px">
+      <div class="mode-tabs">
+        <a-radio-group v-model="searchForm.config_mode" type="button" @change="handleSearch">
+          <a-radio value="">全部</a-radio>
+          <a-radio value="simple">简单模式</a-radio>
+          <a-radio value="orchestration">场景编排</a-radio>
+        </a-radio-group>
+      </div>
       <a-space wrap>
         <a-select
           v-model="searchForm.status"
@@ -24,13 +31,13 @@
           重置
         </a-button>
         <a-button
-          v-if="selectedKeys.size > 0"
+          v-if="allSelectedKeys.length > 0"
           type="primary"
           status="danger"
           @click="handleBatchDelete"
         >
           <template #icon><icon-delete /></template>
-          批量删除 ({{ selectedKeys.size }})
+          批量删除 ({{ allSelectedKeys.length }})
         </a-button>
       </a-space>
     </a-card>
@@ -73,10 +80,31 @@
               :data="group.items"
               :pagination="false"
               :row-key="(record: BatchRunListItem) => record.id"
-              :row-selection="getRowSelection(group.key)"
               size="small"
-              @selection-change="(keys: any) => handleSelectionChange(group.key, keys)"
             >
+              <template #checkbox="{ record }">
+                <a-checkbox
+                  :model-value="(selectedKeysMap[group.key] || []).includes(record.id)"
+                  @change="(checked: boolean) => toggleRowSelection(group.key, record.id, checked)"
+                />
+              </template>
+
+              <template #name="{ record }">
+                <a-tag
+                  v-if="record.config_mode === 'orchestration'"
+                  size="small"
+                  color="purple"
+                  style="margin-right: 6px"
+                >编排</a-tag>
+                <a-tag
+                  v-else
+                  size="small"
+                  color="blue"
+                  style="margin-right: 6px"
+                >简单</a-tag>
+                <span>{{ record.name }}</span>
+              </template>
+
               <template #status="{ record }">
                 <a-tag :color="getStatusColor(record.status)" class="status-tag">
                   <template #icon>
@@ -159,19 +187,30 @@ const router = useRouter()
 const loading = ref(false)
 const tableData = ref<BatchRunListItem[]>([])
 
-// 选中的任务 ID
-const selectedKeys = ref<Set<number>>(new Set())
+// 按分组存储选中的任务 ID（reactive 保证响应式）
+const selectedKeysMap = reactive<Record<string, number[]>>({})
+
+// 所有选中 ID 的扁平数组
+const allSelectedKeys = computed(() => {
+  const ids: number[] = []
+  for (const keys of Object.values(selectedKeysMap)) {
+    ids.push(...keys)
+  }
+  return [...new Set(ids)]
+})
 
 // 展开的分组
 const activeKeys = ref<string[]>(['today', 'yesterday', 'before_yesterday'])
 
 const searchForm = reactive({
-  status: ''
+  status: '',
+  config_mode: ''
 })
 
 const columns = [
+  { title: '', slotName: 'checkbox', width: 50 },
   { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: '任务名称', dataIndex: 'name', width: 200, ellipsis: true },
+  { title: '任务名称', dataIndex: 'name', slotName: 'name', width: 200, ellipsis: true },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
   { title: '进度', dataIndex: 'progress', slotName: 'progress', width: 200 },
   { title: '结果', slotName: 'stats', width: 120 },
@@ -223,22 +262,47 @@ const groupedData = computed(() => {
   })
 
   // 只返回有数据的分组
-  return groups.filter(g => g.items.length > 0)
+  const result = groups.filter(g => g.items.length > 0)
+
+  // 初始化新分组的选择状态（保留已有选择）
+  for (const g of result) {
+    if (!(g.key in selectedKeysMap)) {
+      selectedKeysMap[g.key] = []
+    }
+  }
+
+  return result
 })
 
 // 判断分组是否全选
 const isGroupSelected = (groupKey: string) => {
   const group = groupedData.value.find(g => g.key === groupKey)
   if (!group || group.items.length === 0) return false
-  return group.items.every(item => selectedKeys.value.has(item.id))
+  const selected = selectedKeysMap[groupKey] || []
+  return group.items.every(item => selected.includes(item.id))
 }
 
 // 判断分组是否部分选中
 const isGroupIndeterminate = (groupKey: string) => {
   const group = groupedData.value.find(g => g.key === groupKey)
   if (!group || group.items.length === 0) return false
-  const selectedCount = group.items.filter(item => selectedKeys.value.has(item.id)).length
+  const selected = selectedKeysMap[groupKey] || []
+  const selectedCount = group.items.filter(item => selected.includes(item.id)).length
   return selectedCount > 0 && selectedCount < group.items.length
+}
+
+// 切换单行选中状态
+const toggleRowSelection = (groupKey: string, id: number, checked: boolean) => {
+  if (!selectedKeysMap[groupKey]) {
+    selectedKeysMap[groupKey] = []
+  }
+  const arr = selectedKeysMap[groupKey]
+  const idx = arr.indexOf(id)
+  if (checked && idx === -1) {
+    arr.push(id)
+  } else if (!checked && idx !== -1) {
+    arr.splice(idx, 1)
+  }
 }
 
 // 全选/取消全选某组
@@ -247,40 +311,15 @@ const toggleGroupSelection = (groupKey: string, checked: boolean) => {
   if (!group) return
 
   if (checked) {
-    group.items.forEach(item => selectedKeys.value.add(item.id))
+    selectedKeysMap[groupKey] = group.items.map(item => item.id)
   } else {
-    group.items.forEach(item => selectedKeys.value.delete(item.id))
-  }
-}
-
-// 处理表格行选择变化
-const handleSelectionChange = (groupKey: string, keys: number[]) => {
-  const group = groupedData.value.find(g => g.key === groupKey)
-  if (!group) return
-
-  // 清除该组之前的选择
-  group.items.forEach(item => selectedKeys.value.delete(item.id))
-  // 添加新选择
-  keys.forEach(key => selectedKeys.value.add(key))
-}
-
-// 获取表格行选择配置
-const getRowSelection = (groupKey: string) => {
-  const group = groupedData.value.find(g => g.key === groupKey)
-  if (!group) return undefined
-
-  return {
-    type: 'checkbox' as const,
-    selectedRowKeys: group.items
-      .filter(item => selectedKeys.value.has(item.id))
-      .map(item => item.id),
-    showCheckedAll: false
+    selectedKeysMap[groupKey] = []
   }
 }
 
 // 批量删除
 const handleBatchDelete = async () => {
-  const ids = Array.from(selectedKeys.value)
+  const ids = allSelectedKeys.value
   if (ids.length === 0) return
 
   Modal.confirm({
@@ -293,7 +332,10 @@ const handleBatchDelete = async () => {
       try {
         await batchDeleteBatchRuns(ids)
         Message.success(`成功删除 ${ids.length} 条记录`)
-        selectedKeys.value.clear()
+        // 清空所有选择
+        for (const key of Object.keys(selectedKeysMap)) {
+          selectedKeysMap[key] = []
+        }
         loadData()
       } catch (e: any) {
         Message.error(e?.message || '批量删除失败')
@@ -351,7 +393,8 @@ const loadData = async () => {
     const res = await getBatchRuns({
       page: 1,
       page_size: 100, // 增大每页数量以支持分组
-      status: searchForm.status || undefined
+      status: searchForm.status || undefined,
+      config_mode: searchForm.config_mode || undefined
     })
     tableData.value = res.items
   } catch (e) {
@@ -362,12 +405,15 @@ const loadData = async () => {
 }
 
 const handleSearch = () => {
-  selectedKeys.value.clear()
+  for (const key of Object.keys(selectedKeysMap)) {
+    selectedKeysMap[key] = []
+  }
   loadData()
 }
 
 const handleReset = () => {
   searchForm.status = ''
+  searchForm.config_mode = ''
   handleSearch()
 }
 
@@ -403,6 +449,10 @@ onMounted(() => {
 <style scoped>
 .batch-run-task-list {
   height: 100%;
+}
+
+.mode-tabs {
+  margin-bottom: 12px;
 }
 
 .group-header {

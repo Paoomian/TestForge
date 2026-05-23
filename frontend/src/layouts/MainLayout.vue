@@ -59,7 +59,7 @@
         class="layout-sider"
       >
         <a-menu
-          :default-selected-keys="[currentRoute]"
+          :selected-keys="[activeMenuKey]"
           :style="{ width: '100%' }"
           @menu-item-click="handleMenuClick"
         >
@@ -99,12 +99,27 @@
             <a-menu-item key="api-batch-tasks">任务记录</a-menu-item>
           </a-sub-menu>
 
+          <a-menu-item key="ai-generate">
+            <template #icon>
+              <icon-robot />
+            </template>
+            AI 生成用例
+          </a-menu-item>
+
           <a-sub-menu key="reports">
             <template #icon>
               <icon-file />
             </template>
             <template #title>测试报告</template>
             <a-menu-item key="report-list">报告列表</a-menu-item>
+          </a-sub-menu>
+
+          <a-sub-menu key="tools">
+            <template #icon>
+              <icon-tool />
+            </template>
+            <template #title>开发工具</template>
+            <a-menu-item key="tools">工具目录</a-menu-item>
           </a-sub-menu>
         </a-menu>
       </a-layout-sider>
@@ -133,7 +148,17 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const collapsed = ref(false)
-const currentRoute = computed(() => route.name as string)
+
+// 子路由 → 父菜单项映射
+const childRouteMap: Record<string, string> = {
+  'api-batch-task-detail': 'api-batch-tasks',
+  'api-test-debug': 'api-debug',
+}
+
+const activeMenuKey = computed(() => {
+  const name = route.name as string
+  return childRouteMap[name] || name
+})
 
 // 需要缓存的页面组件名称
 const cachedViews = ['TestCaseManage']
@@ -257,7 +282,19 @@ const handleLogout = () => {
   background: var(--gradient-sidebar) !important;
   border-right: 1px solid rgba(224, 212, 252, 0.25) !important;
   box-shadow: 2px 0 8px rgba(99, 102, 241, 0.03);
-  overflow-y: auto;
+  overflow: hidden !important;
+}
+
+.layout-sider :deep(.arco-layout-sider-children) {
+  overflow: hidden !important;
+}
+
+.layout-sider :deep(.arco-menu) {
+  overflow: hidden !important;
+}
+
+.layout-sider :deep(.arco-menu-inner) {
+  overflow: hidden !important;
 }
 
 .layout-body {

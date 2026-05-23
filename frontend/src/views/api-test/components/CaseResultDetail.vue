@@ -166,11 +166,12 @@
       </a-collapse>
 
       <!-- 提取的变量 -->
-      <a-collapse v-if="Object.keys(detail.extracted_vars).length" :bordered="false" style="margin-bottom: 16px">
+      <a-collapse v-if="detail.extracted_vars && Object.keys(detail.extracted_vars).length" :bordered="false" style="margin-bottom: 16px">
         <a-collapse-item header="提取的变量" key="extracts">
-          <div v-for="(v, k) in detail.extracted_vars" :key="k" class="snapshot-kv">
+          <div v-for="(v, k) in detail.extracted_vars" :key="k" class="snapshot-kv" :class="{ 'var-empty': v == null || v === '' }">
             <span class="snapshot-key">{{ k }}</span>
-            <span class="snapshot-value">{{ v }}</span>
+            <span class="snapshot-value">{{ v ?? '(空)' }}</span>
+            <a-tag v-if="v == null || v === ''" color="orange" size="small">提取失败</a-tag>
           </div>
         </a-collapse-item>
       </a-collapse>
@@ -417,5 +418,18 @@ const formatSize = (bytes?: number) => {
 .api-time {
   font-weight: 600;
   color: #165dff;
+}
+
+.var-empty {
+  background: var(--color-warning-light-1);
+}
+
+.var-empty .snapshot-key {
+  color: var(--color-text-4);
+}
+
+.var-empty .snapshot-value {
+  color: var(--color-text-4);
+  font-style: italic;
 }
 </style>

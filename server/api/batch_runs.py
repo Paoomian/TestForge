@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, APITestCase, Environment
+from models import User, TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, APITestCase, Environment, SceneNode
 from schemas.test_run import (
     BatchRunCreate, BatchRunList, BatchRunInfo, BatchRunDetailSummary, BatchRunDetailFull,
-    BatchRunReport, TestSummary, PerformanceStats, FailureAnalysis, FailureCategory, APICallStat
+    BatchRunReport, TestSummary, PerformanceStats, FailureAnalysis, FailureCategory, APICallStat,
+    NodeTreeItem
 )
 from core.deps import get_current_user, check_permission
 
@@ -86,20 +87,56 @@ async def create_batch_run(
     return _build_run_info(test_run, db)
 
 
+@router.post("/batch-delete")
+async def batch_delete_runs(
+    req: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("api_test:execute")),
+):
+    """批量删除任务"""
+    if not req.run_ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的任务")
+
+    # 查询所有要删除的任务
+    runs = db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).all()
+    if len(runs) != len(req.run_ids):
+        found_ids = {r.id for r in runs}
+        missing = [rid for rid in req.run_ids if rid not in found_ids]
+        raise HTTPException(status_code=404, detail=f"任务不存在: {missing}")
+
+    # 过滤掉运行中的任务
+    running = [r for r in runs if r.status == TestRunStatus.RUNNING]
+    if running:
+        raise HTTPException(status_code=400, detail=f"无法删除运行中的任务: {[r.id for r in running]}")
+
+    # 删除关联的详情记录
+    db.query(TestRunDetail).filter(TestRunDetail.test_run_id.in_(req.run_ids)).delete()
+    # 删除任务
+    db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).delete()
+    db.commit()
+
+    return {"message": f"成功删除 {len(req.run_ids)} 条记录", "deleted": len(req.run_ids)}
+
+
 @router.get("", response_model=dict)
 async def list_batch_runs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: str = Query(None),
+    config_mode: str = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """查询任务列表"""
-    query = db.query(TestRun).filter(TestRun.test_type == "api_batch")
+    query = db.query(TestRun).filter(TestRun.test_type.in_(["api_batch", "api_scene"]))
 
     # 状态筛选
     if status:
         query = query.filter(TestRun.status == status)
+
+    # 模式筛选
+    if config_mode:
+        query = query.filter(TestRun.config_mode == config_mode)
 
     # 总数
     total = query.count()
@@ -118,6 +155,7 @@ async def list_batch_runs(
             id=run.id,
             name=run.name,
             status=run.status or "pending",
+            config_mode=run.config_mode or "simple",
             concurrency=run.concurrency,
             failure_strategy=run.failure_strategy,
             total_count=run.total_count,
@@ -241,35 +279,88 @@ async def delete_batch_run(
     return {"message": "删除成功"}
 
 
-@router.post("/batch-delete")
-async def batch_delete_runs(
-    req: BatchDeleteRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(check_permission("api_test:execute")),
-):
-    """批量删除任务"""
-    if not req.run_ids:
-        raise HTTPException(status_code=400, detail="请选择要删除的任务")
+def _build_node_tree(run: TestRun, details: list[TestRunDetail], db: Session) -> list[NodeTreeItem]:
+    """构建编排节点树"""
+    # 通过 detail 的 node_id 反查 suite_id
+    node_ids = [d.node_id for d in details if d.node_id]
+    if not node_ids:
+        return []
 
-    # 查询所有要删除的任务
-    runs = db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).all()
-    if len(runs) != len(req.run_ids):
-        found_ids = {r.id for r in runs}
-        missing = [rid for rid in req.run_ids if rid not in found_ids]
-        raise HTTPException(status_code=404, detail=f"任务不存在: {missing}")
+    sample_node = db.query(SceneNode).filter(SceneNode.id == node_ids[0]).first()
+    if not sample_node:
+        return []
 
-    # 过滤掉运行中的任务
-    running = [r for r in runs if r.status == TestRunStatus.RUNNING]
-    if running:
-        raise HTTPException(status_code=400, detail=f"无法删除运行中的任务: {[r.id for r in running]}")
+    suite_id = sample_node.suite_id
 
-    # 删除关联的详情记录
-    db.query(TestRunDetail).filter(TestRunDetail.test_run_id.in_(req.run_ids)).delete()
-    # 删除任务
-    db.query(TestRun).filter(TestRun.id.in_(req.run_ids)).delete()
-    db.commit()
+    # 加载该套件的所有场景节点
+    all_nodes = db.query(SceneNode).filter(
+        SceneNode.suite_id == suite_id
+    ).order_by(SceneNode.sort_order).all()
+    node_map = {n.id: n for n in all_nodes}
 
-    return {"message": f"成功删除 {len(req.run_ids)} 条记录", "deleted": len(req.run_ids)}
+    # 构建 node_id -> detail 映射
+    detail_map = {d.node_id: d for d in details if d.node_id}
+
+    # 找出主流程节点（非 branch 内的节点，按 sort_order 排序）
+    # 主流程 = sort_order 排序的所有顶层节点
+    branch_node_ids: set[int] = set()
+    for n in all_nodes:
+        if n.node_type == "condition":
+            branch_node_ids.update(n.true_branch or [])
+            branch_node_ids.update(n.false_branch or [])
+    top_level_nodes = [n for n in all_nodes if n.id not in branch_node_ids]
+
+    def build_tree_item(node_id: int) -> NodeTreeItem | None:
+        node = node_map.get(node_id)
+        if not node:
+            return None
+        detail = detail_map.get(node_id)
+        status = detail.status if detail else "pending"
+        detail_id = detail.id if detail else None
+
+        item = NodeTreeItem(
+            node_id=node.id,
+            node_type=node.node_type,
+            name=node.name,
+            status=status,
+            detail_id=detail_id,
+        )
+
+        # 条件节点：构建分支子树，推导活跃分支
+        if node.node_type == "condition":
+            true_ids = node.true_branch or []
+            false_ids = node.false_branch or []
+
+            item.true_branch = [t for nid in true_ids if (t := build_tree_item(nid))]
+            item.false_branch = [t for nid in false_ids if (t := build_tree_item(nid))]
+
+            # 优先从 request_snapshot.result 读取条件结果
+            if detail and detail.request_snapshot and "result" in detail.request_snapshot:
+                item.active_branch = "true" if detail.request_snapshot["result"] else "false"
+            else:
+                # 兜底：通过分支执行状态推导
+                true_executed = any(
+                    detail_map.get(nid) and detail_map[nid].status not in ("pending", "skipped")
+                    for nid in true_ids
+                )
+                false_executed = any(
+                    detail_map.get(nid) and detail_map[nid].status not in ("pending", "skipped")
+                    for nid in false_ids
+                )
+                if true_executed:
+                    item.active_branch = "true"
+                elif false_executed:
+                    item.active_branch = "false"
+
+        return item
+
+    tree = []
+    for n in top_level_nodes:
+        item = build_tree_item(n.id)
+        if item:
+            tree.append(item)
+
+    return tree
 
 
 def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
@@ -329,17 +420,27 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
             error_message=d.error_message,
         ))
 
-    # 实时计算进度
+    # 计算进度：编排模式 skipped 不计入分母
     total_count = len(details)
-    completed = pass_count + fail_count + error_count
-    progress = round(completed / total_count * 100, 1) if total_count > 0 else 0
+    config_mode = run.config_mode or "simple"
+    if config_mode == "orchestration":
+        executed = pass_count + fail_count + error_count
+        progress = round(pass_count / executed * 100, 1) if executed > 0 else 0
+    else:
+        completed = pass_count + fail_count + error_count
+        progress = round(completed / total_count * 100, 1) if total_count > 0 else 0
+
+    # 编排模式构建节点树
+    node_tree = []
+    if config_mode == "orchestration":
+        node_tree = _build_node_tree(run, details, db)
 
     return BatchRunInfo(
         id=run.id,
         project_id=run.project_id,
         name=run.name,
         status=run.status or "pending",
-        config_mode=run.config_mode or "simple",
+        config_mode=config_mode,
         case_ids=run.case_ids or [],
         environment_id=run.environment_id,
         environment_name=environment_name,
@@ -358,6 +459,7 @@ def _build_run_info(run: TestRun, db: Session) -> BatchRunInfo:
         creator_id=run.creator_id,
         created_at=run.created_at,
         details=detail_summaries,
+        node_tree=node_tree,
     )
 
 

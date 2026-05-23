@@ -32,8 +32,9 @@ export interface ParsedAssertion {
   description: string
 }
 
-export interface ParsedExtract {
+export interface ParsedDataRule {
   name: string
+  rule_type: string
   source: string
   expression: string
   default_value: string
@@ -53,8 +54,8 @@ export interface ParsedCase {
   headers_json?: string
   params_json?: string
   assertions_json?: string
-  extracts_json?: string
-  extracts: ParsedExtract[]
+  data_rules_json?: string
+  data_rules: ParsedDataRule[]
   remark?: string
   headers: ParsedHeader[]
   query_params: ParsedQueryParam[]
@@ -85,7 +86,7 @@ const COLUMN_MAP: Record<string, keyof ParsedCase> = {
   '请求头': 'headers_json',
   '查询参数': 'params_json',
   '断言': 'assertions_json',
-  '数据提取': 'extracts_json',
+  '数据提取': 'data_rules_json',
   '备注': 'remark',
 }
 
@@ -154,16 +155,17 @@ export function parseAssertions(jsonStr?: string): ParsedAssertion[] {
 }
 
 /**
- * 解析数据提取 JSON 数组
+ * 解析数据提取 JSON 数组（输出为 data_rules 格式）
  * 格式: [{"name":"token","source":"jsonpath","expression":"$.data.token","default_value":"","description":"提取token"}]
  */
-export function parseExtracts(jsonStr?: string): ParsedExtract[] {
+export function parseDataRules(jsonStr?: string): ParsedDataRule[] {
   if (!jsonStr) return []
   const arr = safeParseJson(jsonStr)
   if (!Array.isArray(arr)) return []
 
   return arr.map((item: any) => ({
     name: String(item.name || '').trim(),
+    rule_type: 'extract',
     source: String(item.source || 'jsonpath').trim().toLowerCase(),
     expression: String(item.expression || '').trim(),
     default_value: String(item.default_value || item.default || '').trim(),
@@ -235,16 +237,18 @@ function validateCase(parsed: ParsedCase): string[] {
     }
   })
 
-  // 校验数据提取
-  parsed.extracts.forEach((extract, index) => {
-    if (!extract.name) {
-      errors.push(`提取${index + 1}变量名不能为空`)
-    }
-    if (extract.source && !['jsonpath', 'regex', 'header'].includes(extract.source)) {
-      errors.push(`提取${index + 1}来源无效：${extract.source}`)
-    }
-    if (!extract.expression) {
-      errors.push(`提取${index + 1}表达式不能为空`)
+  // 校验数据规则（提取类型）
+  parsed.data_rules.forEach((rule, index) => {
+    if (rule.rule_type === 'extract') {
+      if (!rule.name) {
+        errors.push(`数据规则${index + 1}变量名不能为空`)
+      }
+      if (rule.source && !['jsonpath', 'regex', 'header'].includes(rule.source)) {
+        errors.push(`数据规则${index + 1}来源无效：${rule.source}`)
+      }
+      if (!rule.expression) {
+        errors.push(`数据规则${index + 1}表达式不能为空`)
+      }
     }
   })
 
@@ -291,8 +295,8 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
             headers_json: '',
             params_json: '',
             assertions_json: '',
-            extracts_json: '',
-            extracts: [],
+            data_rules_json: '',
+            data_rules: [],
             remark: '',
             headers: [],
             query_params: [],
@@ -343,7 +347,7 @@ export function parseExcelFile(file: File): Promise<ParsedCase[]> {
           parsed.headers = parseHeaders(parsed.headers_json)
           parsed.query_params = parseQueryParams(parsed.params_json)
           parsed.assertions = parseAssertions(parsed.assertions_json)
-          parsed.extracts = parseExtracts(parsed.extracts_json)
+          parsed.data_rules = parseDataRules(parsed.data_rules_json)
 
           // 校验
           parsed._errors = validateCase(parsed)

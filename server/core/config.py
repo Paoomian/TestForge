@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER_EMAIL: str
     FIRST_SUPERUSER_PASSWORD: str
 
+    # AI 功能配置
+    AI_ENCRYPTION_KEY: str = ""  # API Key 加密密钥
+    AI_FILE_UPLOAD_DIR: str = "uploads/ai"  # 文件上传目录
+
     class Config:
         env_file = ".env"
         case_sensitive = True

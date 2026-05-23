@@ -31,6 +31,15 @@ export interface ExcelAssertionItem {
   description: string
 }
 
+export interface ExcelDataRuleItem {
+  name: string
+  rule_type: string
+  source?: string
+  expression?: string
+  default_value?: string
+  description?: string
+}
+
 export interface ExcelCaseItem {
   name: string
   method: string
@@ -46,6 +55,7 @@ export interface ExcelCaseItem {
   query_params: ExcelQueryParamItem[]
   body_form: ExcelBodyFormItem[]
   assertions: ExcelAssertionItem[]
+  data_rules: ExcelDataRuleItem[]
 }
 
 export interface ImportError {

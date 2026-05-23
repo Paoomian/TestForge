@@ -80,6 +80,16 @@ const routes: RouteRecordRaw[] = [
         path: 'reports',
         name: 'report-list',
         component: () => import('@/views/reports/ReportList.vue')
+      },
+      {
+        path: 'tools',
+        name: 'tools',
+        component: () => import('@/views/tools/ToolsPage.vue')
+      },
+      {
+        path: 'ai-generate',
+        name: 'ai-generate',
+        component: () => import('@/views/ai-generate/index.vue')
       }
     ]
   }

@@ -40,15 +40,6 @@ export interface AssertionItem {
   sort_order?: number
 }
 
-export interface ExtractItem {
-  name: string
-  source: 'jsonpath' | 'regex' | 'header'
-  expression: string
-  default_value?: string
-  description?: string
-  sort_order?: number
-}
-
 export interface DataRuleItem {
   name: string
   rule_type: 'extract' | 'static' | 'generate' | 'transform' | 'conditional'
@@ -115,7 +106,6 @@ export interface APITestCase {
   body_form: BodyFormItem[]
   body_raw?: BodyRawItem
   assertions: AssertionItem[]
-  extracts: ExtractItem[]
   data_rules: DataRuleItem[]
   auth?: AuthConfig
 }
@@ -141,7 +131,6 @@ export interface APITestCaseCreate {
   body_form?: BodyFormItem[]
   body_raw?: BodyRawItem
   assertions?: AssertionItem[]
-  extracts?: ExtractItem[]
   data_rules?: DataRuleItem[]
   auth?: AuthConfig
 }
@@ -166,7 +155,6 @@ export interface APITestCaseUpdate {
   body_form?: BodyFormItem[]
   body_raw?: BodyRawItem
   assertions?: AssertionItem[]
-  extracts?: ExtractItem[]
   data_rules?: DataRuleItem[]
   auth?: AuthConfig
 }
@@ -227,7 +215,6 @@ export interface TestCaseTemplate {
   body_type?: string
   body_raw_content?: string
   assertions?: AssertionItem[]
-  extracts?: ExtractItem[]
   priority?: string
 }
 

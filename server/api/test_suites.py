@@ -29,6 +29,7 @@ async def create_suite(
         project_id=req.project_id,
         name=req.name,
         description=req.description,
+        config_mode=req.config_mode,
         case_ids=req.case_ids,
         environment_id=req.environment_id,
         concurrency=req.concurrency,
@@ -232,14 +233,30 @@ async def run_suite(
             raise HTTPException(status_code=400, detail="没有启用的编排节点")
 
         # 校验 api_call 节点的用例存在性
-        api_call_nodes = [n for n in enabled_nodes if n.node_type == "api_call" and n.case_id]
+        all_api_call_nodes = [n for n in enabled_nodes if n.node_type == "api_call"]
+
+        # case_id 为 NULL 的节点（用例被删除后 FK SET NULL）
+        null_case_nodes = [n for n in all_api_call_nodes if not n.case_id]
+        if null_case_nodes:
+            node_names = [n.name for n in null_case_nodes]
+            raise HTTPException(
+                status_code=400,
+                detail=f"以下节点关联的用例已被删除: {node_names}，请重新创建任务配置"
+            )
+
+        # case_id 存在但用例行已被删除的节点（兜底校验）
+        api_call_nodes = [n for n in all_api_call_nodes if n.case_id]
         if api_call_nodes:
             case_ids = [n.case_id for n in api_call_nodes]
             existing_cases = db.query(APITestCase.id).filter(APITestCase.id.in_(case_ids)).all()
             existing_case_ids = {c.id for c in existing_cases}
-            missing = [cid for cid in case_ids if cid not in existing_case_ids]
-            if missing:
-                raise HTTPException(status_code=400, detail=f"以下用例已被删除: {missing}")
+            missing_nodes = [n for n in api_call_nodes if n.case_id not in existing_case_ids]
+            if missing_nodes:
+                node_names = [n.name for n in missing_nodes]
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"以下节点关联的用例已被删除: {node_names}，请重新创建任务配置"
+                )
 
         # 创建执行任务
         test_run = TestRun(

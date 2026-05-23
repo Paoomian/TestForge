@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from models import (
     APITestCase, Environment,
     TestCaseHeader, TestCaseQueryParam, TestCaseBodyForm, TestCaseBodyRaw,
-    TestCaseAssertion, TestCaseExtract, TestCaseAuth,
+    TestCaseAssertion, TestCaseAuth,
 )
 from schemas.test_run import RunResult, AssertionResult
 from .variable_service import VariableService
@@ -113,14 +113,7 @@ class TestRunner:
                 if script_result.variables:
                     variables.update(script_result.variables)
 
-            # 8. 变量提取
-            extracts = self._load_extracts(case)
-            if extracts:
-                extracted = self.extract_service.extract_variables(extracts, response_info)
-                result.extracted_variables = extracted
-                variables.update(extracted)
-
-            # 8.5 数据规则执行
+            # 8. 数据规则执行（含提取规则）
             data_rules = self._load_data_rules(case)
             if data_rules:
                 rule_results = self.data_rule_service.execute_rules(data_rules, variables, response_info)
@@ -270,14 +263,7 @@ class TestRunner:
             if script_result.variables:
                 variables.update(script_result.variables)
 
-        # 变量提取
-        extracts = self._load_extracts(case)
-        if extracts:
-            extracted = self.extract_service.extract_variables(extracts, response_info)
-            result.extracted_variables = extracted
-            variables.update(extracted)
-
-        # 数据规则执行
+        # 数据规则执行（含提取规则）
         data_rules = self._load_data_rules(case)
         if data_rules:
             rule_results = self.data_rule_service.execute_rules(data_rules, variables, response_info)
@@ -317,7 +303,6 @@ class TestRunner:
             joinedload(APITestCase.body_form),
             joinedload(APITestCase.body_raw),
             joinedload(APITestCase.assertions),
-            joinedload(APITestCase.extracts),
             joinedload(APITestCase.data_rules),
             joinedload(APITestCase.auth),
         ).filter(APITestCase.id == case_id).first()
@@ -403,18 +388,6 @@ class TestRunner:
                 "expected": a.expected,
             }
             for a in (case.assertions or [])
-        ]
-
-    def _load_extracts(self, case: APITestCase) -> list[dict]:
-        """加载提取规则列表"""
-        return [
-            {
-                "name": e.name,
-                "source": e.source,
-                "expression": e.expression,
-                "default_value": e.default_value,
-            }
-            for e in (case.extracts or [])
         ]
 
     def _load_data_rules(self, case: APITestCase) -> list[dict]:

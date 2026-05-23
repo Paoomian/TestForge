@@ -182,10 +182,11 @@
         <div v-if="extractedVars.length" class="section">
           <div class="section-title">提取的变量</div>
           <div class="var-list">
-            <div class="var-item" v-for="v in extractedVars" :key="v.name">
+            <div class="var-item" v-for="v in extractedVars" :key="v.name" :class="{ 'var-empty': v.value == null || v.value === '' }">
               <span class="var-name">{{ v.name }}</span>
-              <span class="var-value">{{ v.value }}</span>
-              <a-button type="text" size="mini" @click="copyText(v.value)">
+              <span class="var-value">{{ v.value ?? '(空)' }}</span>
+              <a-tag v-if="v.value == null || v.value === ''" color="orange" size="small">提取失败</a-tag>
+              <a-button v-else type="text" size="mini" @click="copyText(v.value)">
                 <template #icon><icon-copy /></template>
               </a-button>
             </div>
@@ -196,10 +197,11 @@
         <div v-if="dataRuleVars.length" class="section">
           <div class="section-title">数据规则变量</div>
           <div class="var-list">
-            <div class="var-item" v-for="v in dataRuleVars" :key="v.name">
+            <div class="var-item" v-for="v in dataRuleVars" :key="v.name" :class="{ 'var-empty': v.value == null || v.value === '' }">
               <span class="var-name">{{ v.name }}</span>
-              <span class="var-value">{{ v.value }}</span>
-              <a-button type="text" size="mini" @click="copyText(v.value)">
+              <span class="var-value">{{ v.value ?? '(空)' }}</span>
+              <a-tag v-if="v.value == null || v.value === ''" color="orange" size="small">提取失败</a-tag>
+              <a-button v-else type="text" size="mini" @click="copyText(v.value)">
                 <template #icon><icon-copy /></template>
               </a-button>
             </div>
@@ -277,12 +279,14 @@ const assertionTypeMap: Record<string, string> = {
 
 const extractedVars = computed(() => {
   if (!result.value?.extracted_variables) return []
-  return Object.entries(result.value.extracted_variables).map(([name, value]) => ({ name, value }))
+  return Object.entries(result.value.extracted_variables)
+    .map(([name, value]) => ({ name, value }))
 })
 
 const dataRuleVars = computed(() => {
   if (!result.value?.data_rule_variables) return []
-  return Object.entries(result.value.data_rule_variables).map(([name, value]) => ({ name, value }))
+  return Object.entries(result.value.data_rule_variables)
+    .map(([name, value]) => ({ name, value }))
 })
 
 const hasScriptOutput = computed(() => {
@@ -594,6 +598,19 @@ const copyText = (text: string) => {
 
 .var-item:last-child {
   border-bottom: none;
+}
+
+.var-empty {
+  background: var(--warning-light);
+}
+
+.var-empty .var-name {
+  color: var(--gray-500);
+}
+
+.var-empty .var-value {
+  color: var(--gray-400);
+  font-style: italic;
 }
 
 .var-name {

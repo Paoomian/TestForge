@@ -57,60 +57,85 @@
         </a-card>
 
         <!-- 测试报告（完成后显示） -->
-        <a-card
-          v-else
-          :bordered="false"
-          title="测试报告"
-          style="margin-bottom: 16px"
-        >
-          <TestReportPanel
-            :run-id="Number(taskId)"
-            :status="taskInfo.status"
-            @view-detail="handleViewDetail"
-          />
-        </a-card>
-
-        <!-- 用例执行列表 -->
-        <a-card :bordered="false" title="用例执行列表">
-          <a-table
-            :columns="detailColumns"
-            :data="taskInfo.details"
-            :pagination="false"
-            :loading="tableLoading"
+        <template v-else>
+          <!-- 编排模式：流程图报告 -->
+          <a-card
+            v-if="taskInfo.config_mode === 'orchestration'"
+            :bordered="false"
+            title="场景编排报告"
+            style="margin-bottom: 16px"
           >
-            <template #node_type="{ record }">
-              <a-tag :color="getNodeTypeColor(record.node_type)" size="small">
-                {{ getNodeTypeText(record.node_type) }}
-              </a-tag>
-            </template>
+            <SceneReportPanel
+              :run-id="Number(taskId)"
+              :node-tree="taskInfo.node_tree || []"
+              :details="taskInfo.details"
+              :pass-count="taskInfo.pass_count"
+              :fail-count="taskInfo.fail_count"
+              :error-count="taskInfo.error_count"
+              :duration="taskInfo.duration"
+            />
+          </a-card>
 
-            <template #status="{ record }">
-              <a-tag :color="getDetailStatusColor(record.status)" size="small">
-                {{ getDetailStatusText(record.status) }}
-              </a-tag>
-            </template>
+          <!-- 简单模式：标准报告 -->
+          <a-card
+            v-else
+            :bordered="false"
+            title="测试报告"
+            style="margin-bottom: 16px"
+          >
+            <TestReportPanel
+              :run-id="Number(taskId)"
+              :status="taskInfo.status"
+              @view-detail="handleViewDetail"
+            />
+          </a-card>
 
-            <template #api_duration_ms="{ record }">
-              <span v-if="record.api_duration_ms" class="api-time">{{ record.api_duration_ms }}ms</span>
-              <span v-else>-</span>
-            </template>
+          <!-- 用例执行列表（简单模式始终显示，编排模式折叠） -->
+          <a-card
+            v-if="taskInfo.config_mode !== 'orchestration'"
+            :bordered="false"
+            title="用例执行列表"
+          >
+            <a-table
+              :columns="detailColumns"
+              :data="taskInfo.details"
+              :pagination="false"
+              :loading="tableLoading"
+            >
+              <template #node_type="{ record }">
+                <a-tag :color="getNodeTypeColor(record.node_type)" size="small">
+                  {{ getNodeTypeText(record.node_type) }}
+                </a-tag>
+              </template>
 
-            <template #duration_ms="{ record }">
-              {{ record.duration_ms ? `${record.duration_ms}ms` : '-' }}
-            </template>
+              <template #status="{ record }">
+                <a-tag :color="getDetailStatusColor(record.status)" size="small">
+                  {{ getDetailStatusText(record.status) }}
+                </a-tag>
+              </template>
 
-            <template #actions="{ record }">
-              <a-button
-                v-if="record.status !== 'pending' && record.status !== 'running'"
-                type="text"
-                size="small"
-                @click="viewCaseDetail(record)"
-              >
-                详情
-              </a-button>
-            </template>
-          </a-table>
-        </a-card>
+              <template #api_duration_ms="{ record }">
+                <span v-if="record.api_duration_ms" class="api-time">{{ record.api_duration_ms }}ms</span>
+                <span v-else>-</span>
+              </template>
+
+              <template #duration_ms="{ record }">
+                {{ record.duration_ms ? `${record.duration_ms}ms` : '-' }}
+              </template>
+
+              <template #actions="{ record }">
+                <a-button
+                  v-if="record.status !== 'pending' && record.status !== 'running'"
+                  type="text"
+                  size="small"
+                  @click="viewCaseDetail(record)"
+                >
+                  详情
+                </a-button>
+              </template>
+            </a-table>
+          </a-card>
+        </template>
       </template>
     </a-spin>
 
@@ -132,6 +157,7 @@ import type { BatchRunInfo, CaseDetailSummary } from '@/api/batchRun'
 import BatchRunProgress from './components/BatchRunProgress.vue'
 import CaseResultDetail from './components/CaseResultDetail.vue'
 import TestReportPanel from './components/TestReportPanel.vue'
+import SceneReportPanel from './components/SceneReportPanel.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -5,7 +5,7 @@ from models.test_case_header import TestCaseHeader
 from models.test_case_query_param import TestCaseQueryParam
 from models.test_case_body import TestCaseBodyRaw, TestCaseBodyForm
 from models.test_case_assertion import TestCaseAssertion
-from models.test_case_extract import TestCaseExtract
+from models.test_case_data_rule import TestCaseDataRule
 from schemas.excel_import import ExcelCaseItem, ExcelImportResult, ImportError
 from core.case_number import generate_case_number
 
@@ -43,14 +43,15 @@ def validate_case_item(case: ExcelCaseItem, row: int) -> str | None:
         if assertion.operator not in VALID_ASSERTION_OPERATORS:
             return f"断言{i+1}运算符无效：{assertion.operator}"
 
-    # 校验数据提取
-    for i, extract in enumerate(case.extracts):
-        if not extract.name:
-            return f"提取{i+1}变量名不能为空"
-        if extract.source not in VALID_EXTRACT_SOURCES:
-            return f"提取{i+1}来源无效：{extract.source}（有效值：{', '.join(VALID_EXTRACT_SOURCES)}）"
-        if not extract.expression:
-            return f"提取{i+1}表达式不能为空"
+    # 校验数据规则（提取类型）
+    for i, rule in enumerate(case.data_rules):
+        if rule.rule_type == "extract":
+            if not rule.name:
+                return f"数据规则{i+1}变量名不能为空"
+            if rule.source and rule.source not in VALID_EXTRACT_SOURCES:
+                return f"数据规则{i+1}来源无效：{rule.source}（有效值：{', '.join(VALID_EXTRACT_SOURCES)}）"
+            if not rule.expression:
+                return f"数据规则{i+1}表达式不能为空"
 
     return None
 
@@ -140,15 +141,17 @@ def create_case_from_excel(
             sort_order=i,
         ))
 
-    # 创建数据提取
-    for i, extract in enumerate(case.extracts):
-        db.add(TestCaseExtract(
+    # 创建数据规则
+    for i, rule in enumerate(case.data_rules):
+        db.add(TestCaseDataRule(
             test_case_id=db_case.id,
-            name=extract.name,
-            source=extract.source,
-            expression=extract.expression,
-            default_value=extract.default_value,
-            description=extract.description,
+            name=rule.name,
+            rule_type=rule.rule_type or "extract",
+            enabled=True,
+            source=rule.source,
+            expression=rule.expression,
+            default_value=rule.default_value,
+            description=rule.description,
             sort_order=i,
         ))
 

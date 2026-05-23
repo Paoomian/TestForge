@@ -45,15 +45,6 @@ class AssertionItem(BaseModel):
     sort_order: int = 0
 
 
-class ExtractItem(BaseModel):
-    name: str
-    source: str  # jsonpath / regex / header
-    expression: str
-    default_value: Optional[str] = ""
-    description: Optional[str] = ""
-    sort_order: int = 0
-
-
 class DataRuleItem(BaseModel):
     """数据规则配置项"""
     name: str  # 变量名
@@ -127,7 +118,6 @@ class APITestCaseCreate(BaseModel):
     body_form: list[BodyFormItem] = []
     body_raw: Optional[BodyRawItem] = None
     assertions: list[AssertionItem] = []
-    extracts: list[ExtractItem] = []
     data_rules: list[DataRuleItem] = []
     auth: Optional[AuthConfig] = None
 
@@ -156,7 +146,6 @@ class APITestCaseUpdate(BaseModel):
     body_form: Optional[list[BodyFormItem]] = None
     body_raw: Optional[BodyRawItem] = None
     assertions: Optional[list[AssertionItem]] = None
-    extracts: Optional[list[ExtractItem]] = None
     data_rules: Optional[list[DataRuleItem]] = None
     auth: Optional[AuthConfig] = None
 
@@ -194,7 +183,6 @@ class APITestCaseInDB(BaseModel):
     body_form: list[BodyFormItem] = []
     body_raw: Optional[BodyRawItem] = None
     assertions: list[AssertionItem] = []
-    extracts: list[ExtractItem] = []
     data_rules: list[DataRuleItem] = []
     auth: Optional[AuthConfig] = None
 

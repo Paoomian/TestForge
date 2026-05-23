@@ -112,6 +112,8 @@ class SceneRunner:
                 # 按节点顺序执行
                 i = 0
                 cancelled = False
+                skip_node_ids: set[int] = set()  # 非活跃分支的节点 ID 集合
+
                 while i < len(node_list):
                     # 检查取消
                     if await self._is_cancelled():
@@ -120,6 +122,15 @@ class SceneRunner:
 
                     node = node_list[i]
                     detail = detail_map.get(node.id)
+
+                    # 跳过非活跃分支节点
+                    if node.id in skip_node_ids:
+                        if detail and detail.status == TestRunDetailStatus.PENDING.value:
+                            detail.status = TestRunDetailStatus.SKIPPED.value
+                            detail.finished_at = _now()
+                            self.db.commit()
+                        i += 1
+                        continue
 
                     if not node.enabled:
                         # 跳过禁用节点
@@ -142,9 +153,11 @@ class SceneRunner:
                             node, detail, shared_variables, shared_client
                         )
                     elif node.node_type == "condition":
-                        next_node_id = await self._execute_condition(
+                        next_node_id, condition_result = await self._execute_condition(
                             node, detail, shared_variables
                         )
+                        # 条件评估后，将非活跃分支节点加入跳过集合
+                        self._mark_inactive_branches(node, next_node_id, condition_result, node_map, skip_node_ids)
                     elif node.node_type == "wait":
                         next_node_id = await self._execute_wait(node, detail)
                     elif node.node_type == "data_assign":
@@ -337,8 +350,8 @@ class SceneRunner:
 
     async def _execute_condition(
         self, node: SceneNode, detail: TestRunDetail, variables: dict
-    ) -> int | None:
-        """执行条件判断节点，返回下一个节点 ID"""
+    ) -> tuple[int | None, bool]:
+        """执行条件判断节点，返回 (下一个节点 ID, 条件结果)"""
         detail.status = TestRunDetailStatus.RUNNING.value
         detail.started_at = _now()
         self.db.commit()
@@ -382,10 +395,10 @@ class SceneRunner:
             # 返回跳转目标
             if result:
                 branches = node.true_branch or []
-                return branches[0] if branches else None
+                return (branches[0] if branches else None, True)
             else:
                 branches = node.false_branch or []
-                return branches[0] if branches else None
+                return (branches[0] if branches else None, False)
 
         except Exception as e:
             logger.error(f"[SceneRun] 条件评估异常: {e}", exc_info=True)
@@ -394,7 +407,36 @@ class SceneRunner:
             detail.duration_ms = int((time.monotonic() - start_time) * 1000)
             detail.finished_at = _now()
             self.db.commit()
-            return None
+            return (None, False)
+
+    def _mark_inactive_branches(
+        self, condition_node: SceneNode, active_first_id: int | None,
+        condition_result: bool, node_map: dict, skip_node_ids: set[int]
+    ):
+        """条件评估后，将非活跃分支的所有节点（递归）加入跳过集合"""
+        true_branch = condition_node.true_branch or []
+        false_branch = condition_node.false_branch or []
+
+        if condition_result:
+            # 条件为真，假分支为非活跃
+            inactive_ids = false_branch
+        else:
+            # 条件为假，真分支为非活跃
+            inactive_ids = true_branch
+
+        if not inactive_ids:
+            return
+
+        # 递归收集非活跃分支的所有节点 ID
+        def collect_all(node_ids: list[int]):
+            for nid in node_ids:
+                skip_node_ids.add(nid)
+                n = node_map.get(nid)
+                if n and n.node_type == "condition":
+                    collect_all(n.true_branch or [])
+                    collect_all(n.false_branch or [])
+
+        collect_all(inactive_ids)
 
     async def _execute_wait(self, node: SceneNode, detail: TestRunDetail) -> int | None:
         """执行等待节点"""

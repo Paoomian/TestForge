@@ -35,11 +35,12 @@ class ExcelAssertionItem(BaseModel):
     description: str = ""
 
 
-class ExcelExtractItem(BaseModel):
-    """Excel 导入的数据提取项"""
+class ExcelDataRuleItem(BaseModel):
+    """Excel 导入的数据规则项（含提取规则）"""
     name: str = Field(..., description="变量名")
-    source: str = Field(..., description="jsonpath/regex/header")
-    expression: str = Field(..., description="提取表达式")
+    rule_type: str = Field(default="extract", description="extract/static/generate/transform/conditional")
+    source: str | None = None  # extract 类型：jsonpath/regex/header
+    expression: str | None = None  # extract 类型：提取表达式
     default_value: str = ""
     description: str = ""
 
@@ -63,7 +64,7 @@ class ExcelCaseItem(BaseModel):
     query_params: list[ExcelQueryParamItem] = []
     body_form: list[ExcelBodyFormItem] = []
     assertions: list[ExcelAssertionItem] = []
-    extracts: list[ExcelExtractItem] = []
+    data_rules: list[ExcelDataRuleItem] = []
 
 
 class ExcelImportRequest(BaseModel):

@@ -18,3 +18,10 @@ python-dotenv==1.0.1
 py-mini-racer==0.6.0
 jsonpath-ng==1.7.0
 websockets==13.1
+
+# AI 生成功能依赖
+anthropic>=0.18.0
+openai>=1.12.0
+python-docx>=0.8.11
+PyPDF2>=3.0.0
+pyyaml>=6.0

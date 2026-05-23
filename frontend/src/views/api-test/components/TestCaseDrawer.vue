@@ -139,7 +139,6 @@ import type {
   QueryParamItem,
   BodyFormItem,
   AssertionItem,
-  ExtractItem,
   DataRuleItem,
   AuthConfig,
 } from '@/api/apiTestCase'
@@ -203,7 +202,6 @@ const formData = reactive({
   query_params: [] as QueryParamItem[],
   body_form: [] as BodyFormItem[],
   assertions: [] as AssertionItem[],
-  extracts: [] as ExtractItem[],
   data_rules: [] as DataRuleItem[],
   auth: { auth_type: 'none' } as AuthConfig,
 })
@@ -284,7 +282,6 @@ const loadEditData = async (data: APITestCase) => {
   formData.query_params = (fullData.query_params || []).map(p => ({ ...p }))
   formData.body_form = (fullData.body_form || []).map(f => ({ ...f }))
   formData.assertions = (fullData.assertions || []).map(a => ({ ...a }))
-  formData.extracts = (fullData.extracts || []).map(e => ({ ...e }))
   formData.data_rules = (fullData.data_rules || []).map(r => ({ ...r }))
   formData.auth = fullData.auth ? { ...fullData.auth } : { auth_type: 'none' }
 
@@ -313,7 +310,6 @@ const resetForm = () => {
   formData.query_params = []
   formData.body_form = []
   formData.assertions = []
-  formData.extracts = []
   formData.data_rules = []
   formData.auth = { auth_type: 'none' }
   rawContent.value = ''
@@ -376,7 +372,6 @@ const handleSubmit = async (saveStatus?: string) => {
         body_form: formData.body_form,
         body_raw: bodyRaw,
         assertions: formData.assertions,
-        extracts: formData.extracts,
         data_rules: formData.data_rules,
         auth: formData.auth,
       }
@@ -404,7 +399,6 @@ const handleSubmit = async (saveStatus?: string) => {
         body_form: formData.body_form,
         body_raw: bodyRaw,
         assertions: formData.assertions,
-        extracts: formData.extracts,
         data_rules: formData.data_rules,
         auth: formData.auth,
       }
@@ -443,7 +437,6 @@ const applyTemplate = (tpl: TestCaseTemplate) => {
   formData.headers = (tpl.headers || []).map(h => ({ ...h }))
   formData.query_params = (tpl.query_params || []).map(p => ({ ...p }))
   formData.assertions = (tpl.assertions || []).map(a => ({ ...a }))
-  formData.extracts = (tpl.extracts || []).map(e => ({ ...e }))
   if (tpl.body_raw_content) {
     rawContent.value = tpl.body_raw_content
   }

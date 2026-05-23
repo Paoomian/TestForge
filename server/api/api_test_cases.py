@@ -15,7 +15,7 @@ from schemas.api_test_case import (
 from models import (
     APITestCase, User,
     TestCaseHeader, TestCaseQueryParam, TestCaseBodyForm, TestCaseBodyRaw,
-    TestCaseAssertion, TestCaseExtract, TestCaseAuth, TestCaseDataRule,
+    TestCaseAssertion, TestCaseAuth, TestCaseDataRule,
 )
 from core.deps import get_current_user, check_permission
 from core.case_number import generate_case_number
@@ -68,10 +68,6 @@ def _load_nested(case: APITestCase) -> dict:
             {"assertion_type": a.assertion_type, "operator": a.operator, "field": a.field, "expected": a.expected, "description": a.description, "sort_order": a.sort_order}
             for a in (case.assertions or [])
         ],
-        "extracts": [
-            {"name": e.name, "source": e.source, "expression": e.expression, "default_value": e.default_value, "description": e.description, "sort_order": e.sort_order}
-            for e in (case.extracts or [])
-        ],
         "data_rules": [
             {
                 "name": r.name, "rule_type": r.rule_type, "enabled": r.enabled,
@@ -109,8 +105,6 @@ def _create_children(db: Session, case_id: int, data: APITestCaseCreate):
         db.add(TestCaseBodyRaw(test_case_id=case_id, content=data.body_raw.content))
     for i, a in enumerate(data.assertions):
         db.add(TestCaseAssertion(test_case_id=case_id, assertion_type=a.assertion_type, operator=a.operator, field=a.field, expected=a.expected, description=a.description, sort_order=i))
-    for i, e in enumerate(data.extracts):
-        db.add(TestCaseExtract(test_case_id=case_id, name=e.name, source=e.source, expression=e.expression, default_value=e.default_value, description=e.description, sort_order=i))
     for i, r in enumerate(data.data_rules):
         db.add(TestCaseDataRule(
             test_case_id=case_id, name=r.name, rule_type=r.rule_type, enabled=r.enabled,
@@ -136,7 +130,6 @@ def _delete_children(db: Session, case_id: int):
     db.query(TestCaseBodyForm).filter(TestCaseBodyForm.test_case_id == case_id).delete()
     db.query(TestCaseBodyRaw).filter(TestCaseBodyRaw.test_case_id == case_id).delete()
     db.query(TestCaseAssertion).filter(TestCaseAssertion.test_case_id == case_id).delete()
-    db.query(TestCaseExtract).filter(TestCaseExtract.test_case_id == case_id).delete()
     db.query(TestCaseDataRule).filter(TestCaseDataRule.test_case_id == case_id).delete()
     db.query(TestCaseAuth).filter(TestCaseAuth.test_case_id == case_id).delete()
 
@@ -198,7 +191,7 @@ def create_test_case(
 ):
     case_number = generate_case_number(db, case_in.project_id, case_in.module or "")
 
-    data = case_in.model_dump(exclude={"headers", "query_params", "body_form", "body_raw", "assertions", "extracts", "data_rules", "auth"})
+    data = case_in.model_dump(exclude={"headers", "query_params", "body_form", "body_raw", "assertions", "data_rules", "auth"})
     test_case = APITestCase(**data, case_number=case_number, creator_id=current_user.id)
     db.add(test_case)
     db.flush()
@@ -392,7 +385,6 @@ def get_test_case(
         joinedload(APITestCase.body_form),
         joinedload(APITestCase.body_raw),
         joinedload(APITestCase.assertions),
-        joinedload(APITestCase.extracts),
         joinedload(APITestCase.data_rules),
         joinedload(APITestCase.auth),
     ).filter(APITestCase.id == case_id).first()
@@ -413,14 +405,14 @@ def update_test_case(
         raise HTTPException(status_code=404, detail="Test case not found")
 
     # 更新主表字段
-    main_fields = case_in.model_dump(exclude={"headers", "query_params", "body_form", "body_raw", "assertions", "extracts", "data_rules", "auth"}, exclude_unset=True)
+    main_fields = case_in.model_dump(exclude={"headers", "query_params", "body_form", "body_raw", "assertions", "data_rules", "auth"}, exclude_unset=True)
     for field, value in main_fields.items():
         setattr(test_case, field, value)
 
     # 如果传了子表数据，删除旧的并重新创建
     has_nested = any(
         getattr(case_in, f) is not None
-        for f in ("headers", "query_params", "body_form", "body_raw", "assertions", "extracts", "data_rules", "auth")
+        for f in ("headers", "query_params", "body_form", "body_raw", "assertions", "data_rules", "auth")
     )
     if has_nested:
         _delete_children(db, test_case.id)
@@ -435,7 +427,6 @@ def update_test_case(
             body_form=case_in.body_form or [],
             body_raw=case_in.body_raw,
             assertions=case_in.assertions or [],
-            extracts=case_in.extracts or [],
             data_rules=case_in.data_rules or [],
             auth=case_in.auth,
         )
@@ -485,7 +476,6 @@ def copy_test_case(
         joinedload(APITestCase.body_form),
         joinedload(APITestCase.body_raw),
         joinedload(APITestCase.assertions),
-        joinedload(APITestCase.extracts),
         joinedload(APITestCase.data_rules),
         joinedload(APITestCase.auth),
     ).filter(APITestCase.id == case_id).first()
@@ -527,8 +517,6 @@ def copy_test_case(
         db.add(TestCaseBodyRaw(test_case_id=new_case.id, content=original.body_raw.content))
     for a in (original.assertions or []):
         db.add(TestCaseAssertion(test_case_id=new_case.id, assertion_type=a.assertion_type, operator=a.operator, field=a.field, expected=a.expected, description=a.description, sort_order=a.sort_order))
-    for e in (original.extracts or []):
-        db.add(TestCaseExtract(test_case_id=new_case.id, name=e.name, source=e.source, expression=e.expression, default_value=e.default_value, description=e.description, sort_order=e.sort_order))
     for r in (original.data_rules or []):
         db.add(TestCaseDataRule(
             test_case_id=new_case.id, name=r.name, rule_type=r.rule_type, enabled=r.enabled,

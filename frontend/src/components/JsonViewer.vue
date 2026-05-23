@@ -169,6 +169,7 @@ function handleCopy() {
   background: #1e1e1e;
   border-radius: 8px;
   overflow: auto;
+  height: 100%;
 }
 .jv-toolbar {
   position: sticky;

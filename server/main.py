@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from database import engine, Base
-from api import auth, projects, api_cases, ui_cases, api_test_cases, environments, test_runner, batch_runs, ws_batch, test_suites, scene_nodes
+from api import auth, projects, api_cases, ui_cases, api_test_cases, environments, test_runner, batch_runs, ws_batch, test_suites, scene_nodes, ai_generate, ai_skills
 
 Base.metadata.create_all(bind=engine)
 
@@ -32,6 +32,8 @@ app.include_router(batch_runs.router, prefix=f"{settings.API_V1_STR}/batch-runs"
 app.include_router(ws_batch.router, tags=["websocket"])
 app.include_router(test_suites.router, prefix=f"{settings.API_V1_STR}/test-suites", tags=["test-suites"])
 app.include_router(scene_nodes.router, prefix=f"{settings.API_V1_STR}/scene-nodes", tags=["scene-nodes"])
+app.include_router(ai_generate.router, prefix=f"{settings.API_V1_STR}/ai-generate", tags=["ai-generate"])
+app.include_router(ai_skills.router, prefix=f"{settings.API_V1_STR}/ai-skills", tags=["ai-skills"])
 
 # 禁用自动重定向斜杠
 app.router.redirect_slashes = False

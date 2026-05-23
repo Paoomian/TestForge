@@ -75,9 +75,13 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-container {
-  height: v-bind(height);
+  flex: 1;
+  min-height: 0;
 }
 </style>

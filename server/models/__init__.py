@@ -12,10 +12,11 @@ from .test_case_header import TestCaseHeader
 from .test_case_query_param import TestCaseQueryParam
 from .test_case_body import TestCaseBodyForm, TestCaseBodyRaw
 from .test_case_assertion import TestCaseAssertion
-from .test_case_extract import TestCaseExtract
 from .test_case_auth import TestCaseAuth
 from .test_case_data_rule import TestCaseDataRule
 from .scene_node import SceneNode, SceneNodeType, ConditionOperator, AssignSource
+from .ai_generate import AIProviderConfig, AIGenerateTask
+from .ai_skill import AISkill
 
 __all__ = [
     "User",
@@ -37,7 +38,6 @@ __all__ = [
     "TestCaseBodyForm",
     "TestCaseBodyRaw",
     "TestCaseAssertion",
-    "TestCaseExtract",
     "TestCaseAuth",
     "TestCaseDataRule",
     "SceneNode",

@@ -19,3 +19,4 @@ class User(Base):
 
     roles = relationship("Role", secondary="user_roles", back_populates="users")
     projects = relationship("Project", back_populates="creator")
+    ai_configs = relationship("AIProviderConfig", back_populates="user")

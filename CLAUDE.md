@@ -19,8 +19,8 @@
 cd server
 python -m pip install -r requirements_core.txt
 python -m pip install email-validator "bcrypt<4.0.0"
-python init_db.py  # 仅首次
-python migrations/add_batch_run_fields.py  # 升级已有数据库（首次升级时）
+python init_db.py  # 仅首次（全新安装）
+python migrations/upgrade_all.py  # 升级已有数据库（合并所有迁移，可重复执行）
 
 # 终端1：启动 FastAPI
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -136,5 +136,5 @@ from .config import settings
 
 ---
 
-**最后更新**: 2026-05-20
+**最后更新**: 2026-05-22（场景编排报告页 + 任务列表模式分类）
 ```

@@ -25,6 +25,17 @@ export interface CaseDetailSummary {
   error_message?: string
 }
 
+export interface NodeTreeItem {
+  node_id: number
+  node_type: string
+  name: string
+  status: string
+  detail_id?: number
+  active_branch?: 'true' | 'false'
+  true_branch: NodeTreeItem[]
+  false_branch: NodeTreeItem[]
+}
+
 export interface BatchRunInfo {
   id: number
   project_id: number
@@ -49,12 +60,14 @@ export interface BatchRunInfo {
   creator_id?: number
   created_at: string
   details: CaseDetailSummary[]
+  node_tree: NodeTreeItem[]
 }
 
 export interface BatchRunListItem {
   id: number
   name: string
   status: string
+  config_mode: string
   concurrency: number
   failure_strategy: string
   total_count: number
@@ -179,6 +192,7 @@ export const getBatchRuns = (params?: {
   page?: number
   page_size?: number
   status?: string
+  config_mode?: string
 }) => {
   return request<{ total: number; page: number; page_size: number; items: BatchRunListItem[] }>({
     url: '/batch-runs',

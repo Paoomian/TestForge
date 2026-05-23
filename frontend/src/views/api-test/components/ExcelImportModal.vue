@@ -440,12 +440,12 @@
                 />
               </div>
 
-              <!-- 数据提取 -->
+              <!-- 数据规则 -->
               <div class="expand-section">
-                <div class="section-title">数据提取</div>
-                <ExtractEditor
-                  :model-value="extractsList"
-                  @update:model-value="updateExtracts"
+                <div class="section-title">数据规则</div>
+                <DataRuleEditor
+                  :model-value="dataRulesList"
+                  @update:model-value="updateDataRules"
                 />
               </div>
 
@@ -550,7 +550,7 @@ import {
   IconExpand,
   IconClose,
 } from '@arco-design/web-vue/es/icon'
-import { parseExcelFile, generateExcelTemplate, parseHeaders, parseQueryParams, parseAssertions, parseExtracts } from '@/utils/excelParser'
+import { parseExcelFile, generateExcelTemplate, parseHeaders, parseQueryParams, parseAssertions, parseDataRules } from '@/utils/excelParser'
 import type { ParsedCase } from '@/utils/excelParser'
 import { importExcelCases } from '@/api/excelImport'
 import type { ExcelImportResult } from '@/api/excelImport'
@@ -558,8 +558,8 @@ import KeyValueEditor from './KeyValueEditor.vue'
 import type { KVRow } from './KeyValueEditor.vue'
 import AssertionEditor from './AssertionEditor.vue'
 import type { AssertionItem } from '@/api/apiTestCase'
-import ExtractEditor from './ExtractEditor.vue'
-import type { ExtractItem } from '@/api/apiTestCase'
+import DataRuleEditor from './DataRuleEditor.vue'
+import type { DataRuleItem } from '@/api/apiTestCase'
 
 const props = defineProps<{
   projectId: number
@@ -771,16 +771,18 @@ const assertionsList = computed<AssertionItem[]>(() => {
   }))
 })
 
-// 数据提取 JSON → ExtractItem[]
-const extractsList = computed<ExtractItem[]>(() => {
+// 数据提取 JSON → DataRuleItem[]
+const dataRulesList = computed<DataRuleItem[]>(() => {
   if (!expandedRecord.value) return []
   const arr = safeParseJsonArr(expandedRecord.value.extracts_json)
   return arr.map((item: any) => ({
     name: String(item.name || '').trim(),
-    source: String(item.source || 'jsonpath').trim().toLowerCase() as ExtractItem['source'],
+    rule_type: 'extract',
+    source: String(item.source || 'jsonpath').trim().toLowerCase() as DataRuleItem['source'],
     expression: String(item.expression || '').trim(),
     default_value: String(item.default_value || item.default || '').trim(),
     description: String(item.description || '').trim(),
+    enabled: true,
   }))
 })
 
@@ -816,7 +818,7 @@ const updateAssertions = (items: AssertionItem[]) => {
   expandedRecord.value.assertions_json = arr.length > 0 ? JSON.stringify(arr) : ''
 }
 
-const updateExtracts = (items: ExtractItem[]) => {
+const updateDataRules = (items: DataRuleItem[]) => {
   if (!expandedRecord.value) return
   const arr = items
     .filter(e => e.name && e.expression)
@@ -959,7 +961,7 @@ const handleImport = async () => {
           query_params: parseQueryParams(c.params_json),
           body_form: bodyForm,
           assertions: parseAssertions(c.assertions_json),
-          extracts: parseExtracts(c.extracts_json),
+          data_rules: parseDataRules(c.extracts_json),
         }
       }),
       project_id: props.projectId,

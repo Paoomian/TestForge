@@ -1,195 +1,174 @@
 <template>
-  <a-card
+  <div
     class="scene-node-card"
-    :class="[`node-type-${node.node_type}`, { disabled: !node.enabled }]"
-    :bordered="true"
-    size="small"
+    :class="[`node-type-${node.node_type}`, { selected, disabled: !node.enabled }]"
+    @click="$emit('click')"
   >
-    <div class="node-header">
-      <div class="node-type-badge" :class="`badge-${node.node_type}`">
-        <icon-code v-if="node.node_type === 'api_call'" />
-        <icon-branch v-else-if="node.node_type === 'condition'" />
-        <icon-clock-circle v-else-if="node.node_type === 'wait'" />
-        <icon-storage v-else-if="node.node_type === 'data_assign'" />
-        <span class="badge-text">{{ nodeTypeLabels[node.node_type] }}</span>
+    <div class="card-left">
+      <span class="node-index">{{ index + 1 }}</span>
+      <div class="node-type-dot" :style="{ background: nodeColors[node.node_type] }"></div>
+    </div>
+    <div class="card-content">
+      <div class="card-header">
+        <a-tag :color="nodeColors[node.node_type]" size="small">
+          {{ nodeTypeLabels[node.node_type] }}
+        </a-tag>
       </div>
-
-      <a-input
-        :model-value="node.name"
-        size="small"
-        class="node-name-input"
-        placeholder="节点名称"
-        @update:model-value="$emit('update', { name: $event })"
-      />
-
-      <a-space :size="4">
-        <a-tooltip :content="node.enabled ? '点击禁用' : '点击启用'">
-          <a-switch
-            :model-value="node.enabled"
-            size="small"
-            @update:model-value="$emit('update', { enabled: $event })"
-          />
-        </a-tooltip>
-        <a-tooltip content="删除节点">
-          <a-button type="text" size="mini" status="danger" @click="handleDelete">
-            <template #icon><icon-delete /></template>
-          </a-button>
-        </a-tooltip>
-      </a-space>
+      <div class="card-summary" v-if="summaryText">
+        {{ summaryText }}
+      </div>
     </div>
-
-    <div class="node-body">
-      <ApiCallNodeForm
-        v-if="node.node_type === 'api_call'"
-        :node="node"
-        :cases="cases"
-        @update="$emit('update', $event)"
-      />
-
-      <ConditionNodeForm
-        v-else-if="node.node_type === 'condition'"
-        :node="node"
-        :nodes="nodes"
-        @update="$emit('update', $event)"
-      />
-
-      <WaitNodeForm
-        v-else-if="node.node_type === 'wait'"
-        :node="node"
-        @update="$emit('update', $event)"
-      />
-
-      <DataAssignNodeForm
-        v-else-if="node.node_type === 'data_assign'"
-        :node="node"
-        @update="$emit('update', $event)"
-      />
+    <div class="card-actions" @click.stop>
+      <a-tooltip :content="node.enabled ? '禁用' : '启用'">
+        <a-button type="text" size="mini" @click="$emit('toggle')">
+          <template #icon>
+            <icon-check-circle-fill v-if="node.enabled" style="color: #00b42a" />
+            <icon-minus-circle v-else style="color: #86909c" />
+          </template>
+        </a-button>
+      </a-tooltip>
+      <a-tooltip content="删除">
+        <a-button type="text" size="mini" status="danger" @click="$emit('delete')">
+          <template #icon><icon-delete /></template>
+        </a-button>
+      </a-tooltip>
     </div>
-  </a-card>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { Modal } from '@arco-design/web-vue'
+import { computed } from 'vue'
 import type { SceneNodeItem, SceneNodeType } from '@/api/sceneNode'
-import type { APITestCase } from '@/api/apiTestCase'
-import ApiCallNodeForm from './ApiCallNodeForm.vue'
-import ConditionNodeForm from './ConditionNodeForm.vue'
-import WaitNodeForm from './WaitNodeForm.vue'
-import DataAssignNodeForm from './DataAssignNodeForm.vue'
+
+const nodeColors: Record<SceneNodeType, string> = {
+  api_call: '#3370ff', condition: '#ff7d00', wait: '#86909c', data_assign: '#00b42a'
+}
 
 const nodeTypeLabels: Record<SceneNodeType, string> = {
-  api_call: '接口调用',
-  condition: '条件判断',
-  wait: '等待延时',
-  data_assign: '数据赋值'
+  api_call: '接口调用', condition: '条件判断', wait: '等待延时', data_assign: '数据赋值'
 }
 
-defineProps<{
+const operatorLabels: Record<string, string> = {
+  eq: '==', neq: '!=', gt: '>', lt: '<', gte: '>=', lte: '<=',
+  contains: '包含', not_contains: '不包含', empty: '为空', not_empty: '不为空'
+}
+
+const props = defineProps<{
   node: SceneNodeItem
-  cases: APITestCase[]
-  nodes: SceneNodeItem[]
+  selected: boolean
+  index: number
 }>()
 
-const emit = defineEmits<{
-  (e: 'update', data: Partial<SceneNodeItem>): void
-  (e: 'remove'): void
+defineEmits<{
+  (e: 'click'): void
+  (e: 'toggle'): void
+  (e: 'delete'): void
 }>()
 
-function handleDelete() {
-  Modal.confirm({
-    title: '确认删除',
-    content: '确定要删除这个节点吗？',
-    onOk: () => {
-      emit('remove')
-    }
-  })
-}
+const summaryText = computed(() => {
+  const n = props.node
+  switch (n.node_type) {
+    case 'api_call':
+      return n.case_name || undefined
+    case 'condition':
+      if (n.condition_variable) {
+        return `${n.condition_variable} ${operatorLabels[n.condition_operator || 'eq']} ${n.condition_value || ''}`
+      }
+      return undefined
+    case 'wait':
+      return `等待 ${n.wait_seconds || 5} 秒`
+    case 'data_assign':
+      return n.assign_variable ? `${n.assign_variable} = ${n.assign_value || '...'}` : undefined
+    default:
+      return undefined
+  }
+})
 </script>
 
 <style scoped>
 .scene-node-card {
+  display: flex;
+  align-items: center;
   width: 100%;
-  border-left: 4px solid var(--color-border-3);
+  padding: 10px 12px;
+  background: white;
+  border: 1.5px solid var(--color-border-3);
+  border-radius: 8px;
+  cursor: pointer;
   transition: all 0.2s ease;
+  gap: 10px;
 }
 
 .scene-node-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: var(--color-border-4);
 }
 
-.scene-node-card.node-type-api_call {
-  border-left-color: #3370ff;
-}
-
-.scene-node-card.node-type-condition {
-  border-left-color: #ff7d00;
-}
-
-.scene-node-card.node-type-wait {
-  border-left-color: #86909c;
-}
-
-.scene-node-card.node-type-data_assign {
-  border-left-color: #00b42a;
+.scene-node-card.selected {
+  border-color: var(--color-primary-6);
+  box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
 }
 
 .scene-node-card.disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   background: var(--color-fill-1);
 }
 
-.node-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
+.scene-node-card.node-type-api_call { border-left: 4px solid #3370ff; }
+.scene-node-card.node-type-condition { border-left: 4px solid #ff7d00; }
+.scene-node-card.node-type-wait { border-left: 4px solid #86909c; }
+.scene-node-card.node-type-data_assign { border-left: 4px solid #00b42a; }
 
-.node-type-badge {
+.card-left {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.badge-api_call {
-  background: #e8f3ff;
-  color: #3370ff;
+.node-index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
-.badge-condition {
-  background: #fff7e8;
-  color: #ff7d00;
+.node-type-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.badge-wait {
-  background: #f2f3f5;
-  color: #86909c;
-}
-
-.badge-data_assign {
-  background: #e8ffea;
-  color: #00b42a;
-}
-
-.badge-text {
-  white-space: nowrap;
-}
-
-.node-name-input {
+.card-content {
   flex: 1;
   min-width: 0;
 }
 
-.node-body {
-  padding-top: 4px;
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-:deep(.arco-card-body) {
-  padding: 14px;
+.card-summary {
+  font-size: 11px;
+  color: var(--color-text-3);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
 }
 </style>

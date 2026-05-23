@@ -80,18 +80,6 @@
       </div>
     </div>
 
-    <!-- 提取规则 -->
-    <div class="section" v-if="caseData.extracts?.length">
-      <div class="section-title">变量提取 ({{ caseData.extracts.length }})</div>
-      <div class="extract-list">
-        <div class="extract-item" v-for="(e, i) in caseData.extracts" :key="i">
-          <a-tag size="small" color="arcoblue">{{ sourceMap[e.source] || e.source }}</a-tag>
-          <span class="extract-name">{{ e.name }}</span>
-          <span class="extract-expr">{{ e.expression }}</span>
-        </div>
-      </div>
-    </div>
-
     <!-- 脚本 -->
     <div class="section" v-if="caseData.setup_script || caseData.teardown_script">
       <div class="section-title">脚本</div>

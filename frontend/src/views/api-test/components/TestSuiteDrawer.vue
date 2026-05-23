@@ -1,6 +1,6 @@
 <template>
   <a-drawer
-    :width="900"
+    :width="drawerWidth"
     :visible="visible"
     :title="isEdit ? '编辑任务配置' : '新建任务配置'"
     @update:visible="$emit('update:visible', $event)"
@@ -184,6 +184,11 @@ const filterKeyword = ref('')
 
 // 配置模式：simple-简单模式 / orchestration-场景编排
 const configMode = ref<'simple' | 'orchestration'>('simple')
+
+// 抽屉宽度：编排模式近全屏，简单模式固定宽度
+const drawerWidth = computed(() => {
+  return configMode.value === 'orchestration' ? 'calc(100vw - 80px)' : 900
+})
 const sceneNodes = ref<SceneNodeItem[]>([])
 
 const form = reactive({
@@ -282,6 +287,35 @@ const handleRemoveCase = (caseId: number) => {
   form.case_ids = form.case_ids.filter(id => id !== caseId)
 }
 
+// 从后端加载节点后，根据条件节点的 true_branch/false_branch 推导分支归属
+const deriveBranchData = (loadedNodes: SceneNodeItem[]) => {
+  // 先清除所有分支标记
+  loadedNodes.forEach(n => { delete n.branch_of; delete n.branch_type })
+
+  // 找到所有条件节点，根据其分支数组标记归属
+  const conditions = loadedNodes.filter(n => n.node_type === 'condition')
+  for (const cond of conditions) {
+    if (cond.true_branch?.length) {
+      for (const nodeId of cond.true_branch) {
+        const target = loadedNodes.find(n => n.id === nodeId)
+        if (target) {
+          target.branch_of = cond.id
+          target.branch_type = 'true'
+        }
+      }
+    }
+    if (cond.false_branch?.length) {
+      for (const nodeId of cond.false_branch) {
+        const target = loadedNodes.find(n => n.id === nodeId)
+        if (target) {
+          target.branch_of = cond.id
+          target.branch_type = 'false'
+        }
+      }
+    }
+  }
+}
+
 // 保存场景节点
 const saveSceneNodes = async (suiteId: number) => {
   try {
@@ -297,8 +331,9 @@ const saveSceneNodes = async (suiteId: number) => {
       }
     }
 
-    // 创建或更新节点
+    // 创建或更新节点，同时记录 ID 映射（临时ID → 真实ID）
     const nodeIds: number[] = []
+    const idMapping = new Map<number, number>() // tempId → realId
     for (const node of sceneNodes.value) {
       const nodeData = {
         suite_id: suiteId,
@@ -316,16 +351,40 @@ const saveSceneNodes = async (suiteId: number) => {
         assign_variable: node.assign_variable,
         assign_value: node.assign_value,
         assign_source: node.assign_source
+        // branch_of, branch_type 不传后端（前端渲染用）
       }
 
       if (node.id && existingIds.has(node.id)) {
-        // 更新现有节点
         await updateSceneNode(node.id, nodeData)
         nodeIds.push(node.id)
       } else {
-        // 创建新节点
         const created = await createSceneNode(nodeData)
+        if (node.id && node.id < 0) {
+          idMapping.set(node.id, created.id)
+        }
         nodeIds.push(created.id)
+      }
+    }
+
+    // 更新条件节点的 true_branch/false_branch 中的临时 ID 为真实 ID
+    if (idMapping.size > 0) {
+      for (const node of sceneNodes.value) {
+        if (node.node_type === 'condition' && node.id) {
+          const realId = idMapping.get(node.id) ?? node.id!
+
+          let needUpdate = false
+          const remap = (arr?: number[]) => {
+            if (!arr) return arr
+            const mapped = arr.map(id => idMapping.get(id) ?? id)
+            if (mapped.some((id, i) => id !== arr[i])) needUpdate = true
+            return mapped
+          }
+          const newTrue = remap(node.true_branch)
+          const newFalse = remap(node.false_branch)
+          if (needUpdate) {
+            await updateSceneNode(realId, { true_branch: newTrue, false_branch: newFalse })
+          }
+        }
       }
     }
 
@@ -454,6 +513,7 @@ watch(() => props.visible, async (val) => {
         // 编排模式下加载场景节点
         if (configMode.value === 'orchestration') {
           sceneNodes.value = await getSceneNodes(detail.id)
+          deriveBranchData(sceneNodes.value)
         } else {
           sceneNodes.value = []
         }
