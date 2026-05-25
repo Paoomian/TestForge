@@ -151,6 +151,7 @@
       title="任务详情"
       :width="1200"
       :footer="false"
+      @cancel="handleDetailClose"
     >
       <TaskDetail
         v-if="currentTask"
@@ -162,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import FileUpload from './components/FileUpload.vue'
 import TextInput from './components/TextInput.vue'
@@ -202,6 +203,7 @@ const showConfigModal = ref(false)
 const showSkillModal = ref(false)
 const showTaskDetail = ref(false)
 const currentTask = ref<AIGenerateTask | undefined>(undefined)
+let refreshTimer: number | null = null
 
 // 数据
 const aiConfigs = ref<AIProviderConfig[]>([])
@@ -275,9 +277,39 @@ const handleTypeChange = () => {
 
 const loadTasks = async () => {
   try {
-    tasks.value = await getGenerateTasks()
+    tasks.value = await getGenerateTasks({ limit: 100 })
+    // 检查是否需要自动刷新
+    checkAutoRefresh()
   } catch (error) {
     console.error('加载任务列表失败:', error)
+  }
+}
+
+// 检查是否有进行中的任务，决定是否自动刷新
+const checkAutoRefresh = () => {
+  // 详情弹窗打开时，暂停列表刷新
+  if (showTaskDetail.value) {
+    stopAutoRefresh()
+    return
+  }
+
+  const hasActiveTasks = tasks.value.some(
+    t => t.status === 'pending' || t.status === 'processing'
+  )
+  if (hasActiveTasks && !refreshTimer) {
+    // 启动定时刷新（每3秒）
+    refreshTimer = window.setInterval(loadTasks, 3000)
+  } else if (!hasActiveTasks && refreshTimer) {
+    // 所有任务完成，停止刷新
+    stopAutoRefresh()
+  }
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
   }
 }
 
@@ -356,9 +388,21 @@ const handleViewTask = async (task: AIGenerateTask) => {
   showTaskDetail.value = false
   currentTask.value = undefined
   await nextTick()
+  // 停止列表刷新，避免重复请求
+  stopAutoRefresh()
   // 再打开新任务详情
   currentTask.value = task
   showTaskDetail.value = true
+}
+
+// 关闭详情弹窗时恢复列表刷新
+const handleDetailClose = () => {
+  showTaskDetail.value = false
+  // 延迟清空 currentTask，确保弹窗动画完成后再销毁组件
+  setTimeout(() => {
+    currentTask.value = undefined
+    checkAutoRefresh()
+  }, 300)
 }
 
 const handleDeleteTask = async (taskId: number) => {
@@ -416,6 +460,11 @@ onMounted(async () => {
   }
   loadSkills()
   loadTasks()
+})
+
+// 清理定时器
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 

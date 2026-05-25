@@ -61,9 +61,9 @@
         :columns="isFunctional ? functionalCaseColumns : apiCaseColumns"
         :data="cases"
         :pagination="{ pageSize: 10, showTotal: true }"
-        :row-selection="rowSelection"
+        :row-selection="{ type: 'checkbox' }"
         v-model:selectedKeys="selectedCases"
-        :row-key="(record: any, index: number) => index"
+        row-key="_id"
       >
         <template #name="{ record, rowIndex }">
           <a @click="handleEditCase(rowIndex)">{{ record.name }}</a>
@@ -195,11 +195,6 @@ const apiCaseColumns = [
   { title: '操作', slotName: 'actions', width: 80 }
 ]
 
-const rowSelection = {
-  type: 'checkbox',
-  showCheckedAll: true
-} as any
-
 // 刷新任务状态
 const refreshTask = async () => {
   try {
@@ -235,7 +230,8 @@ const stopAutoRefresh = () => {
 const loadCases = async () => {
   try {
     const result = await getGeneratedCases(props.task.id)
-    cases.value = result.cases
+    // 给每条用例添加唯一标识
+    cases.value = result.cases.map((c: any, i: number) => ({ ...c, _id: i }))
   } catch (error) {
     console.error('加载用例失败:', error)
   }
@@ -253,14 +249,24 @@ const selectNone = () => {
 // 编辑用例
 const handleEditCase = (index: number) => {
   editingIndex.value = index
-  editingCase.value = { ...cases.value[index] }
+  // 深拷贝，避免修改原始数据
+  editingCase.value = JSON.parse(JSON.stringify(cases.value[index]))
   showCaseEditor.value = true
 }
 
 const handleSaveCase = async () => {
+  // 过滤空步骤和空预期结果
+  const caseData = { ...editingCase.value }
+  if (caseData.steps) {
+    caseData.steps = caseData.steps.filter((s: string) => s.trim())
+  }
+  if (caseData.expected_results) {
+    caseData.expected_results = caseData.expected_results.filter((s: string) => s.trim())
+  }
+
   try {
-    await updateGeneratedCase(props.task.id, editingIndex.value, editingCase.value)
-    cases.value[editingIndex.value] = { ...editingCase.value }
+    await updateGeneratedCase(props.task.id, editingIndex.value, caseData)
+    cases.value[editingIndex.value] = JSON.parse(JSON.stringify(caseData))
     showCaseEditor.value = false
     Message.success('用例已更新')
   } catch (error) {

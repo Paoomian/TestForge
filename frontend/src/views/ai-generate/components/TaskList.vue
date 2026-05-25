@@ -7,32 +7,31 @@
       :loading="loading"
     >
       <template #status="{ record }">
-        <a-tag :color="getStatusColor(record.status)">
+        <a-tooltip v-if="record.status === 'failed' && record.error_message" :content="record.error_message" position="tl">
+          <a-tag :color="getStatusColor(record.status)">
+            {{ getStatusText(record.status) }}
+          </a-tag>
+        </a-tooltip>
+        <a-tooltip v-else-if="record.status === 'processing'" :content="record.error_message || '处理中...'" position="tl">
+          <a-tag :color="getStatusColor(record.status)">
+            {{ getStatusText(record.status) }}
+          </a-tag>
+        </a-tooltip>
+        <a-tag v-else :color="getStatusColor(record.status)">
           {{ getStatusText(record.status) }}
         </a-tag>
       </template>
 
-      <template #progress="{ record }">
-        <div v-if="record.status === 'processing'" class="progress-cell">
-          <a-progress
-            :percent="record.progress / 100"
-            :show-text="false"
-            size="small"
-          />
-          <span class="stage-text">{{ record.error_message || '处理中...' }}</span>
-        </div>
-        <span v-else-if="record.status === 'pending'" class="stage-text">等待中...</span>
-        <span v-else-if="record.status === 'completed'">100%</span>
-        <span v-else-if="record.status === 'failed'" class="error-text">{{ record.error_message || '未知错误' }}</span>
-        <span v-else>-</span>
-      </template>
-
       <template #input_type="{ record }">
-        <a-tag>{{ getInputTypeText(record.input_type) }}</a-tag>
+        <a-tag :color="getInputTypeColor(record.input_type)">
+          {{ getInputTypeText(record.input_type) }}
+        </a-tag>
       </template>
 
       <template #generate_type="{ record }">
-        <a-tag>{{ getGenerateTypeText(record.generate_type) }}</a-tag>
+        <a-tag :color="getGenerateTypeColor(record.generate_type)">
+          {{ getGenerateTypeText(record.generate_type) }}
+        </a-tag>
       </template>
 
       <template #created_at="{ record }">
@@ -99,14 +98,13 @@ const emit = defineEmits<{
 }>()
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: '输入类型', dataIndex: 'input_type', slotName: 'input_type', width: 120 },
-  { title: '生成类型', dataIndex: 'generate_type', slotName: 'generate_type', width: 140 },
+  { title: 'ID', dataIndex: 'id', width: 60, align: 'center' as const },
+  { title: '输入类型', dataIndex: 'input_type', slotName: 'input_type', width: 90 },
+  { title: '生成类型', dataIndex: 'generate_type', slotName: 'generate_type', width: 100 },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
-  { title: '进度', dataIndex: 'progress', slotName: 'progress', width: 150 },
-  { title: '生成数量', dataIndex: 'cases_count', width: 100 },
-  { title: '创建时间', dataIndex: 'created_at', slotName: 'created_at', width: 180 },
-  { title: '操作', slotName: 'actions', width: 200, fixed: 'right' }
+  { title: '数量', dataIndex: 'cases_count', width: 60, align: 'center' as const },
+  { title: '创建时间', dataIndex: 'created_at', slotName: 'created_at', width: 150 },
+  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' as const }
 ] as any[]
 
 const getStatusColor = (status: string) => {
@@ -148,6 +146,23 @@ const getGenerateTypeText = (type: string) => {
   return texts[type] || type
 }
 
+const getInputTypeColor = (type: string) => {
+  const colors: Record<string, string> = {
+    prd: 'blue',
+    swagger: 'green',
+    text: 'orange'
+  }
+  return colors[type] || 'gray'
+}
+
+const getGenerateTypeColor = (type: string) => {
+  const colors: Record<string, string> = {
+    functional: 'purple',
+    api: 'cyan'
+  }
+  return colors[type] || 'gray'
+}
+
 const formatTime = (time: string) => {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
@@ -167,29 +182,5 @@ const handleDelete = (taskId: number) => {
 <style scoped>
 .task-list {
   width: 100%;
-}
-
-.progress-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stage-text {
-  font-size: 12px;
-  color: #86909c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
-}
-
-.error-text {
-  font-size: 12px;
-  color: #f53f3f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
 }
 </style>
