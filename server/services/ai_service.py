@@ -82,21 +82,17 @@ class ClaudeProvider(AIProvider):
             return False
 
     async def list_models(self) -> List[Dict[str, str]]:
-        # Claude 没有标准的模型列表 API
-        # 如果配置了中转站，使用 OpenAI 兼容方式查询
+        # 如果配置了中转站，使用 OpenAI 兼容方式查询（失败时抛出错误）
         if self._openai_base_url:
-            try:
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(
-                    api_key=self.api_key,
-                    base_url=self._openai_base_url
-                )
-                models = await client.models.list()
-                return [{"id": m.id, "name": m.id} for m in models.data]
-            except Exception:
-                pass
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self._openai_base_url
+            )
+            models = await client.models.list()
+            return [{"id": m.id, "name": m.id} for m in models.data]
 
-        # 返回已知模型
+        # 官方 Claude API 没有 /v1/models 端点，返回已知模型
         return [
             {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4"},
             {"id": "claude-haiku-4-20250514", "name": "Claude Haiku 4"},
@@ -180,6 +176,10 @@ class DeepSeekProvider(OpenAIProvider):
         super().__init__(api_key, api_base_url or "https://api.deepseek.com/v1")
 
     async def list_models(self) -> List[Dict[str, str]]:
+        # 使用自定义端点时，失败应抛出错误
+        if self.api_base_url:
+            return await super().list_models()
+        # 官方 DeepSeek API，静默返回已知模型
         try:
             return await super().list_models()
         except Exception:

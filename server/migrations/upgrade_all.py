@@ -443,6 +443,21 @@ def ensure_ai_generate_tasks(conn):
 
 # ==================== 主入口 ====================
 
+def ensure_innodb(conn):
+    """将所有 MyISAM 表转换为 InnoDB（外键约束要求）"""
+    result = conn.execute(text(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = DATABASE() AND engine = 'MyISAM'"
+    ))
+    myisam_tables = [row[0] for row in result]
+    if not myisam_tables:
+        return
+    print(f"  发现 {len(myisam_tables)} 个 MyISAM 表，转换为 InnoDB...")
+    for table in myisam_tables:
+        conn.execute(text(f"ALTER TABLE `{table}` ENGINE=InnoDB"))
+        print(f"    ~ {table} -> InnoDB")
+
+
 def upgrade():
     """执行全部升级"""
     print("=" * 50)
@@ -450,6 +465,10 @@ def upgrade():
     print("=" * 50)
 
     with engine.connect() as conn:
+        # 0. 确保所有表使用 InnoDB 引擎
+        print("\n[0/6] 检查存储引擎...")
+        ensure_innodb(conn)
+
         # 1. 创建缺失的表
         print("\n[1/6] 创建缺失的表...")
         ensure_test_suites(conn)

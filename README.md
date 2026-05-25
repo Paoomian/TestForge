@@ -73,13 +73,36 @@
 cd server
 python -m pip install -r requirements_core.txt
 python -m pip install email-validator "bcrypt<4.0.0"
-python init_db.py                    # 全新安装
-python migrations/upgrade_all.py     # 升级已有数据库
+python -m pip install openai           # AI 模型获取（可选）
+```
 
+**配置 `.env`**：
+
+```env
+# 数据库
+DATABASE_URL=mysql+pymysql://root:root@localhost:3306/testplatform?charset=utf8mb4
+
+# 安全
+SECRET_KEY=your-secret-key-here
+AI_ENCRYPTION_KEY=your-fernet-key-here   # AI 配置加密，必填
+```
+
+> `AI_ENCRYPTION_KEY` 可通过 `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` 生成。
+
+**初始化 / 升级数据库**：
+
+```bash
+python init_db.py                    # 全新安装
+python migrations/upgrade_all.py     # 升级已有数据库（自动转换 MyISAM → InnoDB）
+```
+
+**启动服务**：
+
+```bash
 # 终端1：启动 FastAPI
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 终端2：启动 Celery Worker
+# 终端2：启动 Celery Worker（批量执行需要）
 celery -A celery_app worker --loglevel=info
 ```
 
