@@ -41,7 +41,7 @@
           <div class="generate-config">
             <a-form :model="{}" layout="vertical">
               <a-row :gutter="16">
-                <a-col :span="needProject ? 6 : 8">
+                <a-col :span="8">
                   <a-form-item label="生成类型">
                     <a-select v-model="generateType" @change="handleTypeChange">
                       <a-option value="functional">功能测试用例</a-option>
@@ -49,20 +49,7 @@
                     </a-select>
                   </a-form-item>
                 </a-col>
-                <a-col v-if="needProject" :span="6">
-                  <a-form-item label="目标项目">
-                    <a-select v-model="selectedProject" placeholder="选择项目">
-                      <a-option
-                        v-for="project in projects"
-                        :key="project.id"
-                        :value="project.id"
-                      >
-                        {{ project.name }}
-                      </a-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-                <a-col :span="needProject ? 6 : 8">
+                <a-col :span="8">
                   <a-form-item label="选择技能">
                     <a-select v-model="selectedSkill" placeholder="选择 Prompt 技能">
                       <a-option
@@ -75,7 +62,7 @@
                     </a-select>
                   </a-form-item>
                 </a-col>
-                <a-col :span="needProject ? 6 : 8">
+                <a-col :span="8">
                   <a-form-item label="AI 模型">
                     <a-select v-model="selectedConfig" placeholder="选择 AI 配置">
                       <a-option
@@ -156,6 +143,7 @@
       <TaskDetail
         v-if="currentTask"
         :task="currentTask"
+        :projects="projects"
         @save="handleSaveCases"
       />
     </a-modal>
@@ -221,16 +209,11 @@ const uploadedFile = ref<{
 // 计算属性
 const canGenerate = computed(() => {
   if (!selectedConfig.value) return false
-  // 接口测试需要选择项目
-  if (generateType.value === 'api' && !selectedProject.value) return false
   if (inputType.value === 'text') {
     return textContent.value.trim()
   }
   return uploadedFile.value
 })
-
-// 是否需要选择项目
-const needProject = computed(() => generateType.value === 'api')
 
 // 加载数据
 const loadProjects = async () => {
@@ -435,11 +418,11 @@ const handleCancelTask = async (taskId: number) => {
   }
 }
 
-const handleSaveCases = async (taskId: number, caseIndices: number[], module?: string) => {
+const handleSaveCases = async (taskId: number, caseIndices: number[], projectId: number) => {
   try {
     const result = await saveCasesToProject(taskId, {
       case_indices: caseIndices,
-      module
+      project_id: projectId
     })
     Message.success(result.message)
     showTaskDetail.value = false

@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import asyncio
 import time
@@ -361,4 +362,17 @@ def generate_test_cases(self, task_id: int, config_id: int):
             raise self.retry(exc=e, countdown=5)
 
     finally:
+        # 清理上传的临时文件
+        try:
+            task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
+            if task and task.input_file_path:
+                file_path = task.input_file_path
+                # 确保使用绝对路径
+                if not os.path.isabs(file_path):
+                    file_path = os.path.abspath(file_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"[AI生成] 已清理临时文件: {file_path}")
+        except Exception as e:
+            print(f"[AI生成] 清理临时文件失败: {e}")
         db.close()

@@ -1,5 +1,11 @@
 <template>
-  <div class="json-editor">
+  <div class="json-editor" :style="{ height: height }">
+    <div class="editor-toolbar">
+      <a-button size="mini" type="text" @click="formatCode">
+        <template #icon><icon-code /></template>
+        格式化
+      </a-button>
+    </div>
     <div ref="editorContainer" class="editor-container"></div>
   </div>
 </template>
@@ -7,6 +13,18 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
 import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+
+// 配置 Monaco Editor Worker
+self.MonacoEnvironment = {
+  getWorker(_: any, label: string) {
+    if (label === 'json') {
+      return new jsonWorker()
+    }
+    return new editorWorker()
+  }
+}
 
 interface Props {
   modelValue: string
@@ -68,6 +86,46 @@ onBeforeUnmount(() => {
     editor.dispose()
   }
 })
+
+// 格式化代码
+function formatCode() {
+  if (!editor) return
+  const value = editor.getValue()
+  if (props.language === 'json') {
+    try {
+      // 处理包含 {{变量}} 的 JSON
+      const varMap = new Map<string, string>()
+      let processed = value
+      let counter = 0
+
+      // 将 {{xxx}} 替换为占位符
+      processed = processed.replace(/\{\{[^}]+\}\}/g, (match) => {
+        const placeholder = `"__VAR_${counter++}__"`
+        varMap.set(placeholder, match)
+        return placeholder
+      })
+
+      // 格式化 JSON
+      const formatted = JSON.stringify(JSON.parse(processed), null, 2)
+
+      // 将占位符替换回变量
+      let result = formatted
+      varMap.forEach((varExpr, placeholder) => {
+        // 占位符带引号，需要去掉引号
+        result = result.replace(`"${placeholder.replace(/"/g, '')}"`, varExpr)
+        // 也处理不带引号的情况（理论上不应该出现）
+        result = result.replace(placeholder.replace(/"/g, ''), varExpr)
+      })
+
+      editor.setValue(result)
+    } catch (e) {
+      // JSON 解析失败，不处理
+    }
+  } else {
+    // 使用 Monaco 内置格式化
+    editor.getAction('editor.action.formatDocument')?.run()
+  }
+}
 </script>
 
 <style scoped>
@@ -75,13 +133,21 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   overflow: hidden;
-  height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.editor-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-fill-2);
 }
 
 .editor-container {
   flex: 1;
   min-height: 0;
+  width: 100%;
 }
 </style>

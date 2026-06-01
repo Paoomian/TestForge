@@ -15,7 +15,16 @@ VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
 VALID_BODY_TYPES = {"none", "form-data", "x-www-form-urlencoded", "raw-json", "raw-xml", "raw-text"}
 VALID_ASSERTION_TYPES = {"status_code", "jsonpath", "header", "response_time", "body_contains"}
-VALID_ASSERTION_OPERATORS = {"equals", "not_equals", "contains", "greater_than", "less_than", "regex", "exists"}
+VALID_ASSERTION_OPERATORS = {
+    "equals", "not_equals",
+    "contains", "not_contains",
+    "greater_than", "less_than",
+    "greater_than_or_equals", "less_than_or_equals",
+    "regex",
+    "exists", "not_exists",
+    "is_type",
+    "length_equals", "length_greater_than", "length_less_than"
+}
 VALID_EXTRACT_SOURCES = {"jsonpath", "regex", "header"}
 
 

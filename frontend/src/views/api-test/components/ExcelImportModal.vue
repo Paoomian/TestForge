@@ -774,7 +774,7 @@ const assertionsList = computed<AssertionItem[]>(() => {
 // 数据提取 JSON → DataRuleItem[]
 const dataRulesList = computed<DataRuleItem[]>(() => {
   if (!expandedRecord.value) return []
-  const arr = safeParseJsonArr(expandedRecord.value.extracts_json)
+  const arr = safeParseJsonArr(expandedRecord.value.data_rules_json)
   return arr.map((item: any) => ({
     name: String(item.name || '').trim(),
     rule_type: 'extract',
@@ -961,7 +961,7 @@ const handleImport = async () => {
           query_params: parseQueryParams(c.params_json),
           body_form: bodyForm,
           assertions: parseAssertions(c.assertions_json),
-          data_rules: parseDataRules(c.extracts_json),
+          data_rules: parseDataRules(c.data_rules_json),
         }
       }),
       project_id: props.projectId,

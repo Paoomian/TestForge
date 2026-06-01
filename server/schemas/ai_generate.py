@@ -125,13 +125,14 @@ class DocumentUploadOut(BaseModel):
 class SaveCasesRequest(BaseModel):
     """保存用例请求"""
     case_indices: Optional[List[int]] = None  # 不传则保存全部
-    module: Optional[str] = None
+    project_id: int  # 必填，目标项目
 
 
 class SaveCasesResult(BaseModel):
     """保存用例结果"""
     message: str
     saved_count: int
+    errors: list[str] = []
 
 
 class GeneratedCaseUpdate(BaseModel):

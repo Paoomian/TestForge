@@ -27,7 +27,14 @@
       "Bash(python -c \"from models.api_test_case import APITestCase; print\\('Model OK'\\)\")",
       "Bash(python -c \"from schemas.api_test_case import APITestCaseCreate, APITestCaseUpdate, APITestCaseInDB; print\\('Schema OK'\\)\")",
       "Bash(python migrations/remove_history_table.py)",
-      "Bash(python -c \"from api.api_test_cases import router; print\\('Backend OK'\\)\")"
+      "Bash(python -c \"from api.api_test_cases import router; print\\('Backend OK'\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('crypto-js'\\); require\\('qrcode'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"const icons = require\\('@arco-design/web-vue/es/icon'\\); const names = Object.keys\\(icons\\).filter\\(k => k.startsWith\\('Icon'\\)\\).sort\\(\\); console.log\\(names.join\\('\\\\n'\\)\\)\")",
+      "Bash(python -m pip install anthropic openai python-docx PyPDF2 pyyaml)",
+      "Bash(python -c \"import anthropic; import openai; import docx; import PyPDF2; import yaml; from cryptography.fernet import Fernet; print\\('所有依赖安装成功'\\)\")",
+      "Bash(python migrations/upgrade_all.py)",
+      "Bash(python -c ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\97996\\.claude\\plans"

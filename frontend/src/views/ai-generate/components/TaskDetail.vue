@@ -99,7 +99,7 @@
         <template #assertions="{ record }">
           <div class="assertions-cell" v-if="record.assertions && record.assertions.length">
             <a-tag v-for="(a, idx) in record.assertions.slice(0, 3)" :key="idx" size="small" class="assertion-tag">
-              {{ a.assertion_type }}: {{ a.field || '' }} {{ a.operator }} {{ a.expected }}
+              {{ a.assertion_type || a.type }}: {{ a.field || '' }} {{ a.operator }} {{ a.expected }}
             </a-tag>
             <a-tag v-if="record.assertions.length > 3" size="small">+{{ record.assertions.length - 3 }}</a-tag>
           </div>
@@ -128,7 +128,8 @@
     >
       <CaseEditor
         v-if="editingCase"
-        v-model="editingCase"
+        ref="caseEditorRef"
+        :model-value="editingCase"
       />
     </a-modal>
 
@@ -139,9 +140,20 @@
       @ok="confirmSave"
     >
       <a-form :model="{}" layout="vertical">
-        <a-form-item label="目标模块">
-          <a-input v-model="saveModule" placeholder="输入模块名称（可选）" />
+        <a-form-item label="目标项目" required>
+          <a-select v-model="selectedProject" placeholder="请选择项目">
+            <a-option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </a-option>
+          </a-select>
         </a-form-item>
+        <div style="color: var(--color-text-3); font-size: 12px; margin-top: -8px;">
+          模块将使用用例中已设置的所属模块
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -156,10 +168,11 @@ import type { AIGenerateTask } from '@/api/aiGenerate'
 
 const props = defineProps<{
   task: AIGenerateTask
+  projects?: { id: number; name: string }[]
 }>()
 
 const emit = defineEmits<{
-  save: [taskId: number, caseIndices: number[], module?: string]
+  save: [taskId: number, caseIndices: number[], projectId: number]
 }>()
 
 // 状态
@@ -169,8 +182,9 @@ const selectedCases = ref<number[]>([])
 const showCaseEditor = ref(false)
 const editingCase = ref<any>(null)
 const editingIndex = ref(-1)
+const caseEditorRef = ref<any>(null)
 const showSaveConfig = ref(false)
-const saveModule = ref('')
+const selectedProject = ref<number | undefined>()
 let refreshTimer: number | null = null
 
 // 是否功能测试类型
@@ -255,8 +269,10 @@ const handleEditCase = (index: number) => {
 }
 
 const handleSaveCase = async () => {
+  // 从 CaseEditor 获取最新数据
+  const caseData = caseEditorRef.value?.getData() || { ...editingCase.value }
+
   // 过滤空步骤和空预期结果
-  const caseData = { ...editingCase.value }
   if (caseData.steps) {
     caseData.steps = caseData.steps.filter((s: string) => s.trim())
   }
@@ -296,6 +312,24 @@ const handleExportExcel = async () => {
     workbook.created = new Date()
 
     const selectedData = selectedCases.value.map(i => cases.value[i]).filter(Boolean)
+
+    // 辅助函数：将对象格式的headers/query_params转为数组格式
+    const toArray = (data: any): any[] => {
+      if (Array.isArray(data)) return data
+      if (data && typeof data === 'object') {
+        return Object.entries(data).map(([key, value]) => ({ key, value }))
+      }
+      return []
+    }
+
+    // 辅助函数：格式化断言
+    const formatAssertion = (a: any): string => {
+      const type = a.type || a.assertion_type || ''
+      const field = a.field ? ` ${a.field}` : ''
+      const operator = a.operator || ''
+      const expected = a.expected || ''
+      return `${type}${field} ${operator} ${expected}`
+    }
     const isFunc = currentTask.value.generate_type === 'functional'
 
     if (isFunc) {
@@ -336,14 +370,17 @@ const handleExportExcel = async () => {
         })
       }
     } else {
-      // 接口测试用例导出
-      const ws = workbook.addWorksheet('接口测试用例', {
+      // 接口测试用例导出 - 按照导入模板格式
+      const ws = workbook.addWorksheet('用例模板', {
         views: [{ state: 'frozen', ySplit: 1 }]
       })
 
-      const headers = ['用例名称', '请求方法', '请求URL', '优先级', 'Headers', 'Query参数', 'Body类型', 'Body内容', '断言']
+      // 表头定义（与导入模板一致）
+      const headers = ['用例名称', '请求方法', '请求URL', '所属模块', '优先级', '描述', '前置条件', 'Body类型', 'Body内容', '请求头', '查询参数', '断言', '数据提取', '备注']
       ws.columns = [
-        { width: 25 }, { width: 10 }, { width: 35 }, { width: 10 }, { width: 35 }, { width: 25 }, { width: 12 }, { width: 40 }, { width: 50 }
+        { width: 25 }, { width: 10 }, { width: 35 }, { width: 15 }, { width: 10 },
+        { width: 25 }, { width: 25 }, { width: 12 }, { width: 40 },
+        { width: 40 }, { width: 30 }, { width: 60 }, { width: 50 }, { width: 20 }
       ]
 
       const headerRow = ws.addRow(headers)
@@ -354,23 +391,64 @@ const handleExportExcel = async () => {
         cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
       })
 
-      for (const c of selectedData) {
-        const headersStr = (c.headers || []).map((h: any) => `${h.key}: ${h.value}`).join('\n')
-        const queryParamsStr = (c.query_params || []).map((p: any) => `${p.key}=${p.value}`).join('&')
-        const assertionsStr = (c.assertions || []).map((a: any) =>
-          `${a.assertion_type} ${a.field || ''} ${a.operator} ${a.expected}`
-        ).join('\n')
+      // 辅助函数：将数组/对象格式的headers转为JSON对象字符串
+      const headersToJson = (data: any): string => {
+        const arr = toArray(data)
+        if (arr.length === 0) return ''
+        const obj: Record<string, string> = {}
+        arr.forEach((h: any) => { if (h.key) obj[h.key] = h.value || '' })
+        return JSON.stringify(obj)
+      }
 
+      // 辅助函数：将数组/对象格式的query_params转为JSON对象字符串
+      const queryParamsToJson = (data: any): string => {
+        const arr = toArray(data)
+        if (arr.length === 0) return ''
+        const obj: Record<string, string> = {}
+        arr.forEach((p: any) => { if (p.key) obj[p.key] = p.value || '' })
+        return JSON.stringify(obj)
+      }
+
+      // 辅助函数：将断言数组转为JSON字符串
+      const assertionsToJson = (assertions: any[]): string => {
+        if (!assertions || assertions.length === 0) return ''
+        return JSON.stringify(assertions.map(a => ({
+          type: a.type || a.assertion_type || '',
+          ...(a.field ? { field: a.field } : {}),
+          operator: a.operator || '',
+          expected: a.expected || '',
+          ...(a.description ? { description: a.description } : {})
+        })))
+      }
+
+      // 辅助函数：将数据规则转为JSON字符串
+      const dataRulesToJson = (rules: any[]): string => {
+        if (!rules || rules.length === 0) return ''
+        return JSON.stringify(rules.map(r => ({
+          name: r.name || '',
+          source: r.source || 'jsonpath',
+          expression: r.expression || '',
+          ...(r.default_value ? { default_value: r.default_value } : {}),
+          ...(r.description ? { description: r.description } : {})
+        })))
+      }
+
+      for (const c of selectedData) {
         const row = ws.addRow([
           c.name || '',
           c.method || '',
           c.url || '',
-          c.priority || '',
-          headersStr,
-          queryParamsStr,
-          c.body_type || '',
+          c.module || '',
+          c.priority || 'P2',
+          c.description || '',
+          c.preconditions || '',
+          c.body_type || 'none',
           c.body_content || '',
-          assertionsStr
+          headersToJson(c.headers),
+          queryParamsToJson(c.query_params),
+          assertionsToJson(c.assertions || []),
+          dataRulesToJson(c.data_rules || c.data_extract || []),
+          c.remark || ''
         ])
         row.eachCell((cell) => {
           cell.alignment = { vertical: 'top', wrapText: true }
@@ -397,7 +475,12 @@ const handleExportExcel = async () => {
 }
 
 const confirmSave = () => {
-  emit('save', props.task.id, selectedCases.value, saveModule.value || undefined)
+  if (!selectedProject.value) {
+    Message.warning('请选择目标项目')
+    return
+  }
+
+  emit('save', props.task.id, selectedCases.value, selectedProject.value)
   showSaveConfig.value = false
 }
 

@@ -44,4 +44,4 @@ celery_app.conf.update(
 )
 
 # 使用 include 直接指定任务模块，避免自动发现
-celery_app.conf.include = ["tasks.batch_run_task", "tasks.scene_run_task"]
+celery_app.conf.include = ["tasks.batch_run_task", "tasks.scene_run_task", "tasks.ai_generate_tasks"]

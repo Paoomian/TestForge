@@ -267,8 +267,11 @@ async def upload_prd(
     # 解析文档
     parsed = DocumentParser.parse_prd(file_path)
 
+    # 返回绝对路径，确保 Celery worker 能正确清理文件
+    abs_file_path = os.path.abspath(file_path)
+
     return DocumentUploadOut(
-        file_path=file_path,
+        file_path=abs_file_path,
         file_name=file.filename,
         parsed_content=parsed
     )
@@ -302,8 +305,11 @@ async def upload_swagger(
     # 解析文档
     parsed = DocumentParser.parse_swagger(file_path)
 
+    # 返回绝对路径，确保 Celery worker 能正确清理文件
+    abs_file_path = os.path.abspath(file_path)
+
     return DocumentUploadOut(
-        file_path=file_path,
+        file_path=abs_file_path,
         file_name=file.filename,
         parsed_content=parsed
     )
@@ -332,10 +338,6 @@ async def create_generate_task(
 
     if not db_config:
         raise HTTPException(status_code=400, detail="请先配置 AI 模型")
-
-    # 接口测试必须提供 project_id
-    if task.generate_type == 'api' and not task.project_id:
-        raise HTTPException(status_code=400, detail="接口测试必须选择项目")
 
     # 创建任务
     db_task = AIGenerateTask(
@@ -557,6 +559,9 @@ async def update_generated_case(
 
     # 更新用例
     task.generated_cases[case_index] = case_data
+    # 标记 JSON 字段已修改，确保 SQLAlchemy 检测到变化
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(task, 'generated_cases')
     db.commit()
 
     return {"message": "用例已更新"}
@@ -587,6 +592,12 @@ async def save_cases_to_project(
     if not task.generated_cases:
         raise HTTPException(status_code=400, detail="没有可保存的用例")
 
+    # 校验目标项目是否存在
+    from models import Project
+    project = db.query(Project).filter(Project.id == request.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="目标项目不存在")
+
     # 确定要保存的用例
     cases_to_save = task.generated_cases
     if request.case_indices:
@@ -597,26 +608,39 @@ async def save_cases_to_project(
         ]
 
     # 转换并保存用例
+    from core.case_number import generate_case_number
     saved_count = 0
     errors = []
     for idx, case_data in enumerate(cases_to_save):
         try:
+
+            # 生成用例编号，使用用例自身的 module
+            case_module = case_data.get("module") or "DEFAULT"
+            case_number = generate_case_number(db, request.project_id, case_module)
+
             test_case = convert_to_test_case(
                 case_data=case_data,
-                project_id=task.project_id,
+                project_id=request.project_id,
                 generate_type=task.generate_type,
-                module=request.module,
-                creator_id=current_user.id
+                module=case_module,
+                creator_id=current_user.id,
+                case_number=case_number
             )
             db.add(test_case)
             saved_count += 1
         except Exception as e:
-            errors.append(f"用例 {idx + 1}: {str(e)}")
+            import traceback
+            error_detail = f"用例 {idx + 1}: {str(e)}"
+            print(f"[保存用例失败] {error_detail}")
+            traceback.print_exc()
+            errors.append(error_detail)
 
     db.commit()
 
     message = f"成功保存 {saved_count} 个用例"
     if errors:
         message += f"，{len(errors)} 个失败"
+        # 返回具体错误信息便于调试
+        print(f"[保存用例] 失败详情: {errors}")
 
-    return SaveCasesResult(message=message, saved_count=saved_count)
+    return SaveCasesResult(message=message, saved_count=saved_count, errors=errors)
