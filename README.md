@@ -6,7 +6,20 @@
 
 ### UI 自动化测试
 
-> 待开发
+#### 录制回放
+
+- 嵌入式浏览器录制，在平台内直接操作目标网页
+- 实时截图流展示，所见即所得
+- 自动捕获操作：点击、输入、导航、按键等
+- 智能元素定位：自动生成 CSS Selector 和 XPath
+- 录制步骤在线编辑，支持增删改查
+- 用例一键保存到项目，支持导出
+
+#### 用例管理
+
+- 用例列表按项目分组，支持搜索筛选
+- 步骤详情查看，时间线展示执行流程
+- 用例编辑与删除
 
 ---
 
@@ -49,6 +62,37 @@
 
 ---
 
+### AI 生成测试用例
+
+基于大语言模型，从需求文档或接口文档自动生成测试用例，支持在线编辑、导出和保存到项目。
+
+#### 输入源
+
+- **PRD 文档**：上传 `.docx` / `.pdf` / `.md` 格式的需求文档
+- **接口文档**：上传 `.json` / `.yaml` 格式的 Swagger/OpenAPI 文档
+- **文本输入**：直接粘贴需求描述或接口定义
+
+#### 生成能力
+
+- **功能测试用例**：覆盖正常流程、异常流程、边界值、Pairwise 组合、后端一致性验证
+- **接口测试用例**：覆盖正向调用、参数校验、边界值、认证鉴权
+- **Skill 技能系统**：可复用的 Prompt 模板，支持自定义技能，内置功能/接口测试专家默认技能
+- **多模型支持**：OpenAI / Claude / DeepSeek / 自定义兼容端点（中转站、Ollama 等）
+
+#### 结果处理
+
+- 在线编辑生成的用例，支持全选/批量操作
+- 导出为 Excel（格式与导入模板一致）
+- 接口测试用例一键保存到项目（自动生成编号、按模块分组）
+
+#### 任务管理
+
+- Celery 异步执行，带实时进度追踪
+- 支持重试失败任务、取消进行中任务
+- AI 响应多重容错解析（代码块提取、截断修复、引号转义等）
+
+---
+
 ### 开发工具
 
 集成 17 个测试开发常用工具，左侧分类导航，右侧即用即走。
@@ -61,9 +105,9 @@
 
 ## 技术栈
 
-**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · httpx · PyMiniRacer
+**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · httpx · PyMiniRacer · OpenAI SDK
 
-**前端** | Vue 3 · TypeScript · Arco Design Vue · Pinia · ECharts · xlsx
+**前端** | Vue 3 · TypeScript · Arco Design Vue · Pinia · ECharts · xlsx · ExcelJS
 
 ## 快速开始
 
@@ -74,6 +118,7 @@ cd server
 python -m pip install -r requirements_core.txt
 python -m pip install email-validator "bcrypt<4.0.0"
 python -m pip install openai           # AI 模型获取（可选）
+python -m playwright install chromium  # UI 自动化录制需要（首次使用时安装）
 ```
 
 **配置 `.env`**：

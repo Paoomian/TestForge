@@ -16,6 +16,8 @@ class UICaseBase(BaseModel):
     steps: list[dict] = []
     locators: dict = {}
     assertions: list[dict] = []
+    base_url: Optional[str] = None
+    browser_config: Optional[dict] = None
 
 
 class UICaseCreate(UICaseBase):
@@ -28,6 +30,8 @@ class UICaseUpdate(BaseModel):
     steps: Optional[list[dict]] = None
     locators: Optional[dict] = None
     assertions: Optional[list[dict]] = None
+    base_url: Optional[str] = None
+    browser_config: Optional[dict] = None
 
 
 class UICaseInDB(UICaseBase):
@@ -38,3 +42,30 @@ class UICaseInDB(UICaseBase):
 
     class Config:
         from_attributes = True
+
+
+# ========== 录制相关 Schema ==========
+
+class RecordingStartRequest(BaseModel):
+    """启动录制请求"""
+    url: str  # 目标页面URL
+    project_id: int  # 所属项目
+    viewport_width: int = 1280  # 浏览器视口宽度
+    viewport_height: int = 720  # 浏览器视口高度
+    user_agent: Optional[str] = None  # 自定义UA
+
+
+class RecordingStopRequest(BaseModel):
+    """停止录制请求"""
+    name: str  # 用例名称
+    description: Optional[str] = None  # 用例描述
+    project_id: int  # 保存到的项目ID
+    save_to_project: bool = True  # 是否保存到项目
+
+
+class RecordingSession(BaseModel):
+    """录制会话信息"""
+    session_id: str
+    status: str  # connecting / recording / paused / stopped
+    url: str
+    websocket_url: str  # WebSocket连接地址

@@ -458,6 +458,14 @@ def ensure_innodb(conn):
         print(f"    ~ {table} -> InnoDB")
 
 
+def ensure_ui_cases_extended(conn):
+    """扩展 ui_cases 表：添加录制相关字段"""
+    if not table_exists(conn, "ui_cases"):
+        return
+    safe_add_column(conn, "ui_cases", "base_url", "VARCHAR(500) DEFAULT NULL")
+    safe_add_column(conn, "ui_cases", "browser_config", "JSON DEFAULT NULL")
+
+
 def upgrade():
     """执行全部升级"""
     print("=" * 50)
@@ -485,6 +493,7 @@ def upgrade():
         upgrade_test_run_details_columns(conn)
         upgrade_test_suites_columns(conn)
         upgrade_api_test_cases_columns(conn)
+        ensure_ui_cases_extended(conn)
 
         # 3. 修复外键约束
         print("\n[3/6] 修复外键约束...")

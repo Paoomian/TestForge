@@ -14,6 +14,9 @@ class UICase(Base):
     steps = Column(JSON, default=list)
     locators = Column(JSON, default=dict)
     assertions = Column(JSON, default=list)
+    # 录制相关扩展字段
+    base_url = Column(String(500), nullable=True)  # 录制目标URL
+    browser_config = Column(JSON, nullable=True)  # 浏览器配置（视口大小、UA等）
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

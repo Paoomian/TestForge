@@ -42,6 +42,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ui-test/Run.vue')
       },
       {
+        path: 'ui-run-debug/:caseId',
+        name: 'ui-run-debug',
+        component: () => import('@/views/ui-test/RunDebug.vue')
+      },
+      {
         path: 'api-cases',
         name: 'api-cases',
         component: () => import('@/views/api-test/CaseList.vue')
