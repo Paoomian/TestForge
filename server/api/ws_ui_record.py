@@ -99,6 +99,11 @@ async def websocket_ui_record(websocket: WebSocket, session_id: str):
             "url": recorder.url,
         })
 
+        # 发送已有的步骤（WebSocket 连接前可能已经有步骤被记录）
+        for step in recorder.steps:
+            await websocket.send_json({"type": "step_recorded", "step": step})
+            print(f"[WS_RECORD] 发送已有步骤: {step.get('action')}")
+
         # 监听前端消息（用户事件转发）
         while True:
             data = await websocket.receive_text()

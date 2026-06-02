@@ -13,7 +13,7 @@
     />
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading-overlay">
+    <div v-if="props.loading" class="loading-overlay">
       <a-spin :size="40" />
       <span class="loading-text">{{ loadingText }}</span>
     </div>
@@ -43,6 +43,8 @@ interface Props {
   isSelectMode?: boolean
   /** 是否有弹窗打开（忽略弹窗中的键盘输入） */
   hasModal?: boolean
+  /** 是否显示加载状态 */
+  loading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -50,6 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
   viewportHeight: 720,
   isSelectMode: false,
   hasModal: false,
+  loading: false,
 })
 
 const emit = defineEmits<{
@@ -62,7 +65,6 @@ const emit = defineEmits<{
 
 const containerRef = ref<HTMLDivElement>()
 const canvasRef = ref<HTMLCanvasElement>()
-const loading = ref(true)
 const loadingText = ref('正在启动浏览器...')
 const currentImage = ref<HTMLImageElement | null>(null)
 
@@ -126,7 +128,6 @@ function handleWsMessage(data: Record<string, unknown>) {
   switch (msgType) {
     case 'screenshot':
       updateScreenshot(data.data as string)
-      loading.value = false
       break
     case 'step_recorded':
       emit('stepRecorded', data.step as Record<string, unknown>)
@@ -150,12 +151,8 @@ function handleWsMessage(data: Record<string, unknown>) {
       break
     case 'status':
       emit('statusChanged', data.status as string)
-      if (data.status === 'recording') {
-        loading.value = false
-      }
       break
     case 'error':
-      loading.value = true
       loadingText.value = data.message as string
       break
     case 'ping':

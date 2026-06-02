@@ -71,6 +71,7 @@
           :is-recording="isRecording"
           :is-select-mode="isSelectMode"
           :has-modal="assertModalVisible || saveModalVisible || inputModalVisible"
+          :loading="browserLoading"
           :viewport-width="1280"
           :viewport-height="720"
           @step-recorded="handleStepRecorded"
@@ -190,6 +191,7 @@ const recordingStatus = ref('idle') // idle / connecting / recording / paused / 
 const steps = ref<UIStep[]>([])
 const selectedStepIndex = ref(-1)
 const pageHistoryCount = ref(0) // 页面历史栈深度
+const browserLoading = ref(false) // 浏览器加载状态
 
 // 元素选择模式
 const isSelectMode = ref(false)
@@ -263,6 +265,7 @@ async function handleStartRecording() {
 
   try {
     // 调用后端启动录制
+    browserLoading.value = true
     const res = await startRecording({
       url,
       project_id: 1, // 临时默认项目，后续从上下文获取
@@ -298,6 +301,7 @@ async function handleStartRecording() {
     console.error('启动录制失败:', err)
     Message.error(`启动录制失败: ${(err as Error).message || '未知错误'}`)
     recordingStatus.value = 'idle'
+    browserLoading.value = false
   }
 }
 
@@ -324,6 +328,10 @@ async function handleStopRecording() {
 
 function handleStepRecorded(step: UIStep) {
   steps.value.push(step)
+  // 收到第一个步骤时，说明浏览器已启动成功
+  if (browserLoading.value) {
+    browserLoading.value = false
+  }
   // 跟踪页面历史
   if (step.action === 'new_page') {
     pageHistoryCount.value++

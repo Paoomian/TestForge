@@ -59,21 +59,6 @@ async def websocket_ui_run(websocket: WebSocket, case_id: int):
             if "closed" not in str(e).lower():
                 print(f"[WS_RUN] 截图发送失败: {e}")
 
-    # 进度回调
-    def send_progress(progress: dict):
-        try:
-            future = asyncio.run_coroutine_threadsafe(
-                websocket.send_json({
-                    "type": "progress",
-                    **progress,
-                }),
-                main_loop
-            )
-            future.result(timeout=1)
-        except Exception as e:
-            if "closed" not in str(e).lower():
-                print(f"[WS_RUN] 进度发送失败: {e}")
-
     # 心跳任务
     async def send_heartbeat():
         while True:
@@ -91,11 +76,15 @@ async def websocket_ui_run(websocket: WebSocket, case_id: int):
     # 包装进度回调，检测完成状态
     def send_progress_with_done(progress: dict):
         try:
+            # 将进度类型改为 progress_type，避免与消息类型冲突
+            progress_data = {
+                "type": "progress",
+                "progress_type": progress.get("type", ""),
+                **{k: v for k, v in progress.items() if k != "type"},
+            }
+            print(f"[WS_RUN] 发送进度: {progress_data.get('progress_type')}, step={progress_data.get('current')}")
             future = asyncio.run_coroutine_threadsafe(
-                websocket.send_json({
-                    "type": "progress",
-                    **progress,
-                }),
+                websocket.send_json(progress_data),
                 main_loop
             )
             future.result(timeout=1)

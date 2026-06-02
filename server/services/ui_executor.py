@@ -220,6 +220,7 @@ class UIExecutor:
         """执行单个步骤"""
         action = step.get("action")
         start_time = time.time()
+        timeout = step.get("timeout", 10000)  # 默认 10 秒超时
         result = {
             "step": step_num,
             "action": action,
@@ -233,6 +234,8 @@ class UIExecutor:
             if action == "navigate":
                 url = step.get("url", "")
                 await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                # 等待页面加载完成
+                await self._page.wait_for_load_state("networkidle", timeout=10000)
                 result["success"] = True
                 result["message"] = f"导航到 {url}"
 
@@ -240,9 +243,15 @@ class UIExecutor:
                 target = step.get("target", {})
                 selector = target.get("selector")
                 if selector:
-                    await self._page.click(selector, timeout=5000)
-                    result["success"] = True
-                    result["message"] = f"点击 {target.get('text', selector)}"
+                    # 显式等待元素出现并可点击
+                    element = await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
+                    if element:
+                        await element.scroll_into_view_if_needed()
+                        await element.click(timeout=5000)
+                        result["success"] = True
+                        result["message"] = f"点击 {target.get('text', selector)}"
+                    else:
+                        result["message"] = f"元素未找到: {selector}"
                 else:
                     result["message"] = "缺少选择器"
 
@@ -251,9 +260,16 @@ class UIExecutor:
                 value = step.get("value", "")
                 selector = target.get("selector")
                 if selector and value:
-                    await self._page.fill(selector, value, timeout=5000)
-                    result["success"] = True
-                    result["message"] = f"输入 '{value}'"
+                    # 显式等待输入框出现
+                    element = await self._page.wait_for_selector(selector, state="visible", timeout=timeout)
+                    if element:
+                        await element.scroll_into_view_if_needed()
+                        await element.click()
+                        await element.fill(value, timeout=5000)
+                        result["success"] = True
+                        result["message"] = f"输入 '{value}'"
+                    else:
+                        result["message"] = f"输入框未找到: {selector}"
                 else:
                     result["message"] = "缺少选择器或值"
 
@@ -267,12 +283,15 @@ class UIExecutor:
                     result["message"] = "缺少按键"
 
             elif action == "new_page":
-                # 新窗口已在 click 步骤中处理
+                # 新窗口已在 click 步骤中处理，等待新页面加载
+                await asyncio.sleep(1)  # 等待新窗口打开
+                await self._page.wait_for_load_state("domcontentloaded", timeout=10000)
                 result["success"] = True
                 result["message"] = "新窗口已打开"
 
             elif action == "go_back":
                 await self._page.go_back()
+                await self._page.wait_for_load_state("domcontentloaded", timeout=10000)
                 result["success"] = True
                 result["message"] = "返回上一页"
 
@@ -280,6 +299,7 @@ class UIExecutor:
                 delta_x = step.get("deltaX", 0)
                 delta_y = step.get("deltaY", 0)
                 await self._page.mouse.wheel(delta_x, delta_y)
+                await asyncio.sleep(0.5)  # 等待滚动完成
                 result["success"] = True
                 result["message"] = f"滚动 ({delta_x}, {delta_y})"
 

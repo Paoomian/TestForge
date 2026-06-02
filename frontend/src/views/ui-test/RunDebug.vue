@@ -42,8 +42,8 @@
       <!-- 左侧：浏览器画面 -->
       <div class="content-left">
         <div class="browser-view">
-          <canvas ref="canvasRef" class="preview-canvas" />
-          <div v-if="!currentScreenshot" class="empty-state">
+          <canvas v-if="currentScreenshot" ref="canvasRef" class="preview-canvas" />
+          <div v-else class="empty-state">
             <icon-play-arrow style="font-size: 48px; color: #c9cdd4;" />
             <span>点击"开始执行"查看实时画面</span>
           </div>
@@ -126,7 +126,7 @@ const currentScreenshot = ref('')
 const execStatus = ref('idle') // idle / running / completed
 const currentStep = ref(0)
 const totalSteps = ref(0)
-const stepResults = ref<Array<{ success: boolean; message: string; duration: number }>>([])
+const stepResults = ref<Array<{ success: boolean; message: string; duration: number; done: boolean }>>([])
 
 // ========== 计算属性 ==========
 
@@ -160,7 +160,7 @@ const allPassed = computed(() => {
 // ========== 方法 ==========
 
 function isStepDone(index: number): boolean {
-  return index < stepResults.value.length
+  return index < stepResults.value.length && stepResults.value[index]?.done === true
 }
 
 function getActionLabel(action?: string): string {
@@ -242,6 +242,7 @@ async function loadCase() {
       success: false,
       message: '',
       duration: 0,
+      done: false,
     }))
   } catch (err) {
     Message.error('加载用例失败')
@@ -256,6 +257,7 @@ function handleStart() {
     success: false,
     message: '',
     duration: 0,
+    done: false,
   }))
 
   // 建立 WebSocket 连接
@@ -322,9 +324,11 @@ function handleWsMessage(data: Record<string, unknown>) {
 }
 
 function handleProgress(data: Record<string, unknown>) {
-  const progressType = data.type as string
+  const progressType = data.progress_type as string
   const current = data.current as number
   const total = data.total as number
+
+  console.log('[RunDebug] 收到进度:', progressType, current, total)
 
   currentStep.value = current
   totalSteps.value = total
@@ -337,6 +341,7 @@ function handleProgress(data: Record<string, unknown>) {
         success: result.success as boolean,
         message: result.message as string,
         duration: result.duration as number,
+        done: true,
       }
     }
   }
@@ -419,6 +424,7 @@ onUnmounted(() => {
 .content-left {
   flex: 1;
   min-width: 0;
+  height: 100%;
 }
 
 .browser-view {
@@ -429,6 +435,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .preview-canvas {
@@ -440,8 +447,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   color: #86909c;
+  width: 100%;
+  height: 100%;
 }
 
 .content-right {

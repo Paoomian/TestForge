@@ -128,18 +128,21 @@ class UIRecorder:
             # 注入操作监听脚本
             await self._inject_event_listeners()
 
-            # 标记初始导航（让 framenavigated 回调处理记录）
-            self._initial_navigation = True
-
             # 导航到目标页面
             await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
+            # 等待页面加载完成
+            await self._page.wait_for_load_state("networkidle", timeout=10000)
+
             self.status = "recording"
+
+            # 记录第一个导航步骤
+            await self._record_step({"action": "navigate", "url": url})
 
             # 启动截图循环
             self._screenshot_task = asyncio.create_task(self._screenshot_loop())
 
-            logger.info(f"录制会话 {self.session_id} 已启动: {url}")
+            print(f"[RECORDER] 录制会话 {self.session_id} 已启动: {url}")
 
         except Exception as e:
             self.status = "stopped"
@@ -204,6 +207,18 @@ class UIRecorder:
             if not current_url or current_url == "about:blank":
                 print(f"[FRAME_NAVIGATED] 跳过: about:blank")
                 return
+
+            # 如果最后一步是 click，跳过导航记录（Vue 路由跳转等）
+            if self.steps:
+                last_step = self.steps[-1]
+                last_action = last_step.get("action")
+                # 最后一步是 click，且时间在 2 秒内，跳过导航
+                if last_action == "click":
+                    last_time = last_step.get("timestamp", 0)
+                    now = time.time() * 1000
+                    if (now - last_time) < 2000:
+                        print(f"[FRAME_NAVIGATED] 跳过: 点击后的导航 (last_action={last_action})")
+                        return
 
             # 防重复：如果当前 URL 和最后一个 navigate 步骤的 URL 相同，跳过
             if self.steps:
@@ -362,7 +377,8 @@ class UIRecorder:
         elif action == "mousedown":
             print(f"[MOUSE_EVENT] 执行 mousedown at ({x}, {y})")
             await self._page.mouse.move(x, y)
-            await self._page.mouse.down()
+            # 记录拖拽起点，但不执行 mouse.down()
+            # mouse.down() 会在 mouseup 时与 mouse.up() 一起执行，避免重复点击
             self._drag_start = {"x": x, "y": y}
             self._drag_path = [{"x": x, "y": y}]
             print(f"[MOUSE_EVENT] mousedown 执行完成")
@@ -374,10 +390,10 @@ class UIRecorder:
             elif is_dragging:
                 self._drag_path = [{"x": self._drag_start.get("x", x), "y": self._drag_start.get("y", y)}, {"x": x, "y": y}]
         elif action == "mouseup":
-            await self._page.mouse.up()
             print(f"[MOUSE_EVENT] mouseup: isClick={is_click}, isDragging={is_dragging}, drag_path_len={len(self._drag_path) if hasattr(self, '_drag_path') else 0}")
             # 如果是拖拽操作结束
             if is_dragging and hasattr(self, '_drag_path') and len(self._drag_path) > 1:
+                await self._page.mouse.up()
                 start = self._drag_path[0]
                 end = {"x": x, "y": y}
                 element_info = await self._get_element_at_point(start["x"], start["y"])
@@ -390,19 +406,13 @@ class UIRecorder:
                     })
                 self._drag_path = []
             elif is_click:
-                # 短点击 - 执行 click 操作
-                print(f"[MOUSE_EVENT] 执行 click at ({x}, {y})")
-                try:
-                    await self._page.mouse.click(x, y)
-                    print(f"[MOUSE_EVENT] click 执行成功")
-                except Exception as e:
-                    print(f"[MOUSE_EVENT] click 执行失败: {e}")
+                # 先获取元素信息（在执行 click 之前）
                 element_info = await self._get_element_at_point(x, y)
                 print(f"[MOUSE_EVENT] element_info: {element_info is not None}")
+
                 if element_info:
                     # 检查是否点击了输入框
                     tag = element_info.get("tagName", "")
-                    input_type = element_info.get("attributes", {}).get("type", "")
                     is_input = tag in ["input", "textarea"] or tag == "select"
 
                     # 如果之前有输入在进行，先结束
@@ -410,6 +420,8 @@ class UIRecorder:
                         await self._finish_input()
 
                     if is_input:
+                        # 执行 click
+                        await self._page.mouse.click(x, y)
                         # 发送输入框信息给前端，弹出输入弹窗
                         if self._step_callback:
                             try:
@@ -423,8 +435,20 @@ class UIRecorder:
                                 pass
                         print(f"[INPUT] 检测到输入框，等待用户输入: {element_info.get('selector')}")
                     else:
-                        # 非输入框，直接记录点击步骤
+                        # 先记录点击步骤（在执行 click 之前，避免导航事件先触发）
                         await self._record_step({"action": "click", "target": element_info})
+                        # 然后执行 click
+                        print(f"[MOUSE_EVENT] 执行 click at ({x}, {y})")
+                        try:
+                            await self._page.mouse.click(x, y)
+                            print(f"[MOUSE_EVENT] click 执行成功")
+                        except Exception as e:
+                            print(f"[MOUSE_EVENT] click 执行失败: {e}")
+                        # 点击后短暂延迟，让页面有时间响应（如下拉框展开）
+                        await asyncio.sleep(0.3)
+                else:
+                    # 没有获取到元素信息，直接执行 click
+                    await self._page.mouse.click(x, y)
             else:
                 # 普通 mouseup，清理拖拽路径
                 if hasattr(self, '_drag_path'):
@@ -611,6 +635,22 @@ class UIRecorder:
                     const el = document.elementFromPoint(x, y);
                     if (!el) return null;
 
+                    // 动态 class 过滤列表
+                    const dynamicClasses = [
+                        'focus', 'active', 'hover', 'disabled', 'checked', 'selected',
+                        'open', 'close', 'show', 'hide', 'visible', 'hidden',
+                        'loading', 'error', 'success', 'warning', 'info'
+                    ];
+
+                    function isDynamicClass(cls) {
+                        const lower = cls.toLowerCase();
+                        return dynamicClasses.some(dc => lower.includes(dc)) ||
+                               lower.startsWith('arco-') && lower.endsWith('-focus') ||
+                               lower.startsWith('arco-') && lower.endsWith('-active') ||
+                               lower.startsWith('arco-') && lower.endsWith('-hover') ||
+                               lower.match(/^t-|^ant-|^el-|^arco-/);
+                    }
+
                     function getSelector(el) {
                         if (el.id) return '#' + CSS.escape(el.id);
                         let path = [];
@@ -619,7 +659,7 @@ class UIRecorder:
                             if (el.id) { path.unshift('#' + CSS.escape(el.id)); break; }
                             if (el.className && typeof el.className === 'string') {
                                 const classes = el.className.trim().split(/\\s+/)
-                                    .filter(c => c && !c.startsWith('__'))
+                                    .filter(c => c && !c.startsWith('__') && !isDynamicClass(c))
                                     .map(c => '.' + CSS.escape(c));
                                 if (classes.length > 0) selector += classes.slice(0, 2).join('');
                             }
@@ -725,12 +765,7 @@ class UIRecorder:
 
         print(f"[RECORD_STEP] 记录步骤 #{self._step_counter}: action={step.get('action')}, id={step.get('id')}")
 
-        try:
-            screenshot_bytes = await self._page.screenshot(type="jpeg", quality=60)
-            step["screenshot"] = base64.b64encode(screenshot_bytes).decode("utf-8")
-        except Exception:
-            pass
-
+        # 不保存截图到数据库，只在实时显示时使用
         self.steps.append(step)
 
         if self._step_callback:
