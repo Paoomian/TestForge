@@ -26,6 +26,8 @@ export interface UIStep {
   to?: { x: number; y: number }
   // 新窗口操作专用
   from_url?: string
+  // 等待操作专用
+  waitMs?: number
 }
 
 export interface UICase {
@@ -52,6 +54,7 @@ export interface RecordingSession {
 export interface RecordingStartParams {
   url: string
   project_id: number
+  environment_id?: number
   viewport_width?: number
   viewport_height?: number
   user_agent?: string
@@ -62,6 +65,7 @@ export interface RecordingStopParams {
   description?: string
   project_id: number
   save_to_project?: boolean
+  steps?: UIStep[]
 }
 
 // ========== API 函数 ==========

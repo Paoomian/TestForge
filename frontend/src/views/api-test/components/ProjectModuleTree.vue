@@ -50,12 +50,39 @@
       <a-empty v-if="!loading && treeData.length === 0" description="暂无数据" style="margin-top: 40px" />
       <a-tree
         v-else
+        ref="treeRef"
         :data="treeData"
         :show-line="true"
+        :show-icon="true"
         :default-expand-all="false"
         :selected-keys="selectedKeys"
+        :expanded-keys="expandedKeys"
         @select="handleSelect"
-      />
+        @expand="handleExpand"
+      >
+        <template #icon="{ node }">
+          <span
+            class="custom-icon-wrapper"
+            @click.stop="handleIconClick(node)"
+          >
+            <icon-folder v-if="node.isProject" />
+            <icon-file v-else />
+          </span>
+        </template>
+        <template #title="nodeData">
+          <span class="tree-node-title">
+            <span>{{ nodeData.title }}</span>
+            <a-tag
+              v-if="nodeData.isProject"
+              size="small"
+              color="arcoblue"
+              class="case-count-tag"
+            >
+              {{ getProjectCaseCount(nodeData.projectId) }}
+            </a-tag>
+          </span>
+        </template>
+      </a-tree>
     </a-spin>
 
     <!-- 新建模块弹窗 -->
@@ -103,12 +130,33 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import {
+  IconFolder,
+  IconFile,
+} from '@arco-design/web-vue/es/icon'
 import { getProjects } from '@/api/project'
-import { getModuleTree, createModule, deleteModule, renameModule } from '@/api/apiTestCase'
+import { getModuleTree, createModule, deleteModule, renameModule, getTestCases } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
 import type { ModuleTree } from '@/api/apiTestCase'
 
 const loading = ref(false)
+const projectCaseCounts = ref<Record<number, number>>({})
+
+function getProjectCaseCount(projectId: number): number {
+  return projectCaseCounts.value[projectId] || 0
+}
+
+async function loadProjectCaseCounts() {
+  // 加载每个项目的用例数
+  for (const p of projects.value) {
+    try {
+      const res = await getTestCases({ project_id: p.id, skip: 0, limit: 1000 })
+      projectCaseCounts.value[p.id] = res?.length || 0
+    } catch {
+      projectCaseCounts.value[p.id] = 0
+    }
+  }
+}
 
 interface TreeNode {
   key: string
@@ -241,6 +289,26 @@ const handleSelect = (_keys: (string | number)[], data: any) => {
   }
 }
 
+const treeRef = ref()
+const expandedKeys = ref<string[]>([])
+
+const handleIconClick = (node: any) => {
+  // 切换节点的展开/折叠状态
+  if (treeRef.value) {
+    const isExpanded = expandedKeys.value.includes(node.key)
+    treeRef.value.expandNode(node.key, !isExpanded)
+    if (isExpanded) {
+      expandedKeys.value = expandedKeys.value.filter(k => k !== node.key)
+    } else {
+      expandedKeys.value.push(node.key)
+    }
+  }
+}
+
+const handleExpand = (keys: string[]) => {
+  expandedKeys.value = keys
+}
+
 const handleAddModuleClick = () => {
   if (selectedNode.value) {
     handleAddModule(selectedNode.value)
@@ -349,6 +417,8 @@ const loadData = async () => {
     ])
     projects.value = projectsData
     moduleTree.value = moduleTreeData
+    // 加载每个项目的用例数
+    await loadProjectCaseCounts()
   } catch (error) {
     console.error('Failed to load tree data:', error)
   } finally {
@@ -388,7 +458,111 @@ defineExpose({
   gap: 8px;
 }
 
+/* 美化树节点样式 */
+:deep(.arco-tree-node) {
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin: 2px 0;
+  transition: all 0.2s ease;
+}
+
+:deep(.arco-tree-node:hover) {
+  background: var(--gray-100);
+}
+
+:deep(.arco-tree-node-selected) {
+  background: #e8f3ff !important;
+}
+
+:deep(.arco-tree-node-selected .arco-tree-node-title) {
+  color: #165DFF;
+  font-weight: 500;
+}
+
+/* 项目节点样式 */
+:deep(.arco-tree-node-level-1) {
+  font-weight: 500;
+}
+
+/* 模块节点样式 */
+:deep(.arco-tree-node-level-2),
+:deep(.arco-tree-node-level-3) {
+  font-size: 13px;
+}
+
+/* 图标样式 */
+:deep(.arco-tree-node-switcher-icon) {
+  color: #86909c;
+}
+
+:deep(.arco-tree-node-selected .arco-tree-node-switcher-icon) {
+  color: #165DFF;
+}
+
+/* 隐藏展开/折叠图标和默认图标 */
+:deep(.arco-tree-node-switcher) {
+  display: none !important;
+}
+
+:deep(.arco-tree-node-icon) {
+  display: none !important;
+}
+
+:deep(.arco-tree-node-custom-icon) {
+  display: inline-flex !important;
+  margin-right: 4px;
+}
+
+.custom-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  color: #86909c;
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.custom-icon-wrapper:hover {
+  color: #165DFF;
+}
+
+:deep(.arco-tree-node-selected) .custom-icon-wrapper {
+  color: #165DFF;
+}
+
+/* 用例数标签 */
 :deep(.arco-tree-node-title) {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+:deep(.arco-tree-node-title-text) {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
   flex: 1;
+  min-width: 0;
+}
+
+.tree-node-title {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  gap: 8px;
+}
+
+.tree-node-title span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-count-tag {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-left: auto !important;
 }
 </style>

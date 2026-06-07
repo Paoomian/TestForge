@@ -159,12 +159,13 @@ const actionOptions = [
 // 监听步骤变化，更新表单
 watch(() => props.step, (newStep) => {
   if (newStep) {
+    const stepData = newStep as Record<string, unknown>
     formData.value = {
       action: newStep.action,
       url: newStep.url || '',
       value: newStep.value || '',
       key: newStep.key || '',
-      waitBefore: newStep.waitBefore || 0,
+      waitBefore: (stepData.waitMs as number) || newStep.waitBefore || 0,
       selector: newStep.target?.selector || '',
       xpath: newStep.target?.xpath || '',
     }
@@ -186,6 +187,11 @@ function handleApply() {
       selector: formData.value.selector || undefined,
       xpath: formData.value.xpath || undefined,
     } : undefined,
+  }
+
+  // 如果是等待步骤，设置 waitMs 字段
+  if (formData.value.action === 'wait') {
+    (updatedStep as Record<string, unknown>).waitMs = formData.value.waitBefore || 1000
   }
 
   emit('updateStep', updatedStep)

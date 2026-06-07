@@ -50,6 +50,8 @@ class RecordingStartRequest(BaseModel):
     """启动录制请求"""
     url: str  # 目标页面URL
     project_id: int  # 所属项目
+    environment_id: Optional[int] = None  # 环境ID（用于URL参数化）
+    base_url: Optional[str] = None  # 基础URL（用于变量替换，如 http://dev.example.com）
     viewport_width: int = 1280  # 浏览器视口宽度
     viewport_height: int = 720  # 浏览器视口高度
     user_agent: Optional[str] = None  # 自定义UA
@@ -61,6 +63,7 @@ class RecordingStopRequest(BaseModel):
     description: Optional[str] = None  # 用例描述
     project_id: int  # 保存到的项目ID
     save_to_project: bool = True  # 是否保存到项目
+    steps: Optional[list[dict]] = None  # 前端传入的步骤（可选，覆盖录制器中的步骤）
 
 
 class RecordingSession(BaseModel):

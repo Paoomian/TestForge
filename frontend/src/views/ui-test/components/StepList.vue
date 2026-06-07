@@ -20,8 +20,18 @@
         v-for="(step, index) in steps"
         :key="step.id"
         class="step-item"
-        :class="{ 'step-item--active': selectedIndex === index }"
+        :class="{
+          'step-item--active': selectedIndex === index,
+          'step-item--dragging': dragIndex === index,
+          'step-item--drag-over': dragOverIndex === index && dragIndex !== index,
+        }"
+        draggable="true"
         @click="$emit('selectStep', index)"
+        @dragstart="handleDragStart(index, $event)"
+        @dragover.prevent="handleDragOver(index, $event)"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop(index, $event)"
+        @dragend="handleDragEnd"
       >
         <!-- 步骤序号 -->
         <div class="step-index">{{ index + 1 }}</div>
@@ -42,16 +52,36 @@
           <img :src="`data:image/jpeg;base64,${step.screenshot}`" alt="截图" />
         </div>
 
-        <!-- 删除按钮 -->
-        <a-button
-          type="text"
-          size="mini"
-          status="danger"
-          class="step-delete"
-          @click.stop="$emit('deleteStep', index)"
-        >
-          <template #icon><icon-delete /></template>
-        </a-button>
+        <!-- 操作按钮 -->
+        <div class="step-actions">
+          <a-dropdown @select="(value) => handleInsertStep(index, value as string)" position="br">
+            <a-button
+              type="text"
+              size="mini"
+              class="step-insert"
+              @click.stop
+            >
+              <template #icon><icon-plus /></template>
+            </a-button>
+            <template #content>
+              <a-doption value="navigate">导航</a-doption>
+              <a-doption value="click">点击</a-doption>
+              <a-doption value="type">输入</a-doption>
+              <a-doption value="press">按键</a-doption>
+              <a-doption value="wait">等待</a-doption>
+              <a-doption value="assert">断言</a-doption>
+            </template>
+          </a-dropdown>
+          <a-button
+            type="text"
+            size="mini"
+            status="danger"
+            class="step-delete"
+            @click.stop="$emit('deleteStep', index)"
+          >
+            <template #icon><icon-delete /></template>
+          </a-button>
+        </div>
       </div>
 
       <!-- 空状态 -->
@@ -77,6 +107,7 @@ import {
   IconClockCircle,
   IconObliqueLine,
   IconCheckCircle,
+  IconPlus,
 } from '@arco-design/web-vue/es/icon'
 import type { UIStep } from '@/api/uiCase'
 
@@ -87,13 +118,58 @@ interface Props {
 
 const props = defineProps<Props>()
 
-defineEmits<{
+const emit = defineEmits<{
   selectStep: [index: number]
   deleteStep: [index: number]
   clearAll: []
+  reorder: [fromIndex: number, toIndex: number]
+  insertStep: [afterIndex: number, action: string]
 }>()
 
 const listRef = ref<HTMLDivElement>()
+
+// 拖拽状态
+const dragIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
+// 拖拽处理函数
+function handleDragStart(index: number, event: DragEvent) {
+  dragIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', index.toString())
+  }
+}
+
+function handleDragOver(index: number, event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  dragOverIndex.value = index
+}
+
+function handleDragLeave() {
+  dragOverIndex.value = null
+}
+
+function handleDrop(toIndex: number, event: DragEvent) {
+  event.preventDefault()
+  if (dragIndex.value !== null && dragIndex.value !== toIndex) {
+    emit('reorder', dragIndex.value, toIndex)
+  }
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+function handleDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+function handleInsertStep(afterIndex: number, action: string) {
+  emit('insertStep', afterIndex, action)
+}
 
 // 自动滚动到底部
 watch(() => props.steps.length, () => {
@@ -187,6 +263,10 @@ function getStepDescription(step: UIStep): string {
   if (step.action === 'press') {
     return step.key || ''
   }
+  if (step.action === 'wait') {
+    const waitMs = (step as Record<string, unknown>).waitMs as number || step.waitBefore || 0
+    return `${waitMs}ms`
+  }
   if (step.action === 'drag') {
     const from = step.from as { x: number; y: number } | undefined
     const to = step.to as { x: number; y: number } | undefined
@@ -278,6 +358,25 @@ function getStepDescription(step: UIStep): string {
   border-color: #165DFF;
 }
 
+/* 拖拽样式 */
+.step-item[draggable="true"] {
+  cursor: grab;
+}
+
+.step-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.step-item--dragging {
+  opacity: 0.5;
+  background: #e8f3ff;
+}
+
+.step-item--drag-over {
+  border-top: 2px solid #165DFF;
+  margin-top: -2px;
+}
+
 .step-index {
   width: 24px;
   height: 24px;
@@ -340,13 +439,22 @@ function getStepDescription(step: UIStep): string {
   object-fit: cover;
 }
 
-.step-delete {
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   opacity: 0;
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
 }
 
-.step-item:hover .step-delete {
+.step-item:hover .step-actions {
   opacity: 1;
+}
+
+.step-insert,
+.step-delete {
+  flex-shrink: 0;
 }
 
 .step-empty {

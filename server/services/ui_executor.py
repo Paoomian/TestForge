@@ -34,6 +34,7 @@ class UIExecutor:
         self,
         steps: list[dict],
         base_url: str = "",
+        variables: Optional[dict] = None,
         viewport_width: int = 1280,
         viewport_height: int = 720,
         screenshot_callback: Optional[Callable] = None,
@@ -47,12 +48,12 @@ class UIExecutor:
         # 在独立线程中执行
         self._thread = threading.Thread(
             target=self._run_in_thread,
-            args=(steps, base_url, viewport_width, viewport_height),
+            args=(steps, base_url, variables, viewport_width, viewport_height),
             daemon=True,
         )
         self._thread.start()
 
-    def _run_in_thread(self, steps, base_url, viewport_width, viewport_height):
+    def _run_in_thread(self, steps, base_url, variables, viewport_width, viewport_height):
         """在独立线程中运行"""
         if platform.system() == "Windows":
             self._loop = asyncio.ProactorEventLoop()
@@ -61,7 +62,7 @@ class UIExecutor:
         asyncio.set_event_loop(self._loop)
         try:
             result = self._loop.run_until_complete(
-                self.execute(steps, base_url, viewport_width, viewport_height)
+                self.execute(steps, base_url, variables, viewport_width, viewport_height)
             )
             # 通知执行完成
             if self._progress_callback:
@@ -85,6 +86,7 @@ class UIExecutor:
         self,
         steps: list[dict],
         base_url: str = "",
+        variables: Optional[dict] = None,
         viewport_width: int = 1280,
         viewport_height: int = 720,
         screenshot_callback: Optional[Callable] = None,
@@ -100,6 +102,11 @@ class UIExecutor:
         self.results = []
         self.status = "running"
         self._should_stop = False
+
+        # 合并变量：环境变量 + base_url
+        self._variables = variables or {}
+        if base_url:
+            self._variables['base_url'] = base_url.rstrip('/')
 
         try:
             # 启动浏览器
@@ -216,6 +223,16 @@ class UIExecutor:
         except asyncio.CancelledError:
             pass
 
+    def _replace_variables(self, text: str) -> str:
+        """替换字符串中的 {{variable}} 变量"""
+        if not text or not self._variables:
+            return text
+        import re
+        def replace_match(match):
+            var_name = match.group(1)
+            return self._variables.get(var_name, match.group(0))
+        return re.sub(r'\{\{(\w+)\}\}', replace_match, text)
+
     async def _execute_step(self, step: dict, step_num: int) -> dict:
         """执行单个步骤"""
         action = step.get("action")
@@ -229,6 +246,13 @@ class UIExecutor:
             "screenshot": None,
             "duration": 0,
         }
+
+        # 变量替换：替换步骤中的 URL 和 value
+        step = step.copy()
+        if "url" in step:
+            step["url"] = self._replace_variables(step["url"])
+        if "value" in step:
+            step["value"] = self._replace_variables(step["value"])
 
         try:
             if action == "navigate":
@@ -303,6 +327,29 @@ class UIExecutor:
                 result["success"] = True
                 result["message"] = f"滚动 ({delta_x}, {delta_y})"
 
+            elif action == "drag":
+                # 拖拽操作
+                from_point = step.get("from")
+                to_point = step.get("to")
+                if from_point and to_point:
+                    # 执行拖拽：移动到起点 → 按下 → 移动到终点 → 释放
+                    await self._page.mouse.move(from_point["x"], from_point["y"])
+                    await self._page.mouse.down()
+                    # 分步移动到终点，模拟真实拖拽
+                    steps_count = 10
+                    for i in range(steps_count + 1):
+                        ratio = i / steps_count
+                        x = from_point["x"] + (to_point["x"] - from_point["x"]) * ratio
+                        y = from_point["y"] + (to_point["y"] - from_point["y"]) * ratio
+                        await self._page.mouse.move(x, y)
+                        await asyncio.sleep(0.02)  # 20ms 间隔
+                    await self._page.mouse.up()
+                    await asyncio.sleep(0.3)  # 等待拖拽完成
+                    result["success"] = True
+                    result["message"] = f"拖拽 ({from_point['x']},{from_point['y']}) → ({to_point['x']},{to_point['y']})"
+                else:
+                    result["message"] = "缺少拖拽坐标"
+
             elif action == "wait":
                 wait_ms = step.get("waitMs", 1000)
                 await asyncio.sleep(wait_ms / 1000)
@@ -334,7 +381,7 @@ class UIExecutor:
         """执行断言"""
         assert_type = step.get("type")
         selector = step.get("selector")
-        expected = step.get("expected", "")
+        expected = step.get("expected", "").strip()  # 去除首尾空格
         timeout = step.get("timeout", 5000)
 
         result = {

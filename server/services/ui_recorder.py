@@ -40,6 +40,8 @@ class UIRecorder:
         self._input_target = None
         self._input_value = ""
         self._input_initial_value = ""  # 输入框的初始值
+        # URL 参数化
+        self._base_url: Optional[str] = None  # 环境的 base_url，用于变量替换
         # 回调函数
         self._screenshot_callback: Optional[Callable] = None
         self._step_callback: Optional[Callable] = None
@@ -50,6 +52,7 @@ class UIRecorder:
     def start(
         self,
         url: str,
+        base_url: Optional[str] = None,
         viewport_width: int = 1280,
         viewport_height: int = 720,
         user_agent: Optional[str] = None,
@@ -58,6 +61,7 @@ class UIRecorder:
     ):
         """启动录制会话（同步方法，内部启动线程）"""
         self.url = url
+        self._base_url = base_url.rstrip('/') if base_url else None
         self.status = "connecting"
         self._screenshot_callback = screenshot_callback
         self._step_callback = step_callback
@@ -80,14 +84,18 @@ class UIRecorder:
         asyncio.set_event_loop(self._loop)
         try:
             # 启动 Playwright
+            print(f"[RECORDER] 正在启动浏览器...")
             self._loop.run_until_complete(
                 self._start_playwright(url, viewport_width, viewport_height, user_agent)
             )
+            print(f"[RECORDER] 浏览器启动完成，状态: {self.status}")
             # 保持事件循环运行，直到录制停止
             if self.status != "stopped":
                 self._loop.run_forever()
         except Exception as e:
             print(f"[RECORDER] 录制线程异常: {e}")
+            import traceback
+            traceback.print_exc()
             self.status = "stopped"
         finally:
             # 清理事件循环中的所有任务
@@ -99,22 +107,29 @@ class UIRecorder:
                 # 等待所有任务完成取消
                 if pending:
                     self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            except Exception:
-                pass
-            self._loop.close()
+            except Exception as e:
+                print(f"[RECORDER] 清理任务异常: {e}")
+            try:
+                self._loop.close()
+            except Exception as e:
+                print(f"[RECORDER] 关闭事件循环异常: {e}")
 
     async def _start_playwright(self, url, viewport_width, viewport_height, user_agent):
         """启动 Playwright 浏览器"""
         try:
+            print(f"[RECORDER] 启动 Playwright...")
             self._playwright = await async_playwright().start()
+            print(f"[RECORDER] 启动 Chromium 浏览器...")
             self._browser = await self._playwright.chromium.launch(
                 headless=True,
                 args=["--no-sandbox", "--disable-gpu"]
             )
+            print(f"[RECORDER] 创建浏览器上下文...")
             self._context = await self._browser.new_context(
                 viewport={"width": viewport_width, "height": viewport_height},
                 user_agent=user_agent,
             )
+            print(f"[RECORDER] 创建新页面...")
             self._page = await self._context.new_page()
 
             # 监听新页面打开事件（target="_blank" 链接、window.open 等）
@@ -126,18 +141,40 @@ class UIRecorder:
             self._setup_page_listeners(self._page)
 
             # 注入操作监听脚本
+            print(f"[RECORDER] 注入事件监听脚本...")
             await self._inject_event_listeners()
 
-            # 导航到目标页面
-            await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # 记录录制开始时间，用于忽略后续的自动重定向
+            self._recording_start_time = time.time()
 
-            # 等待页面加载完成
-            await self._page.wait_for_load_state("networkidle", timeout=10000)
+            # 导航到目标页面
+            print(f"[RECORDER] 导航到 {url}...")
+            try:
+                await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except Exception as e:
+                # 某些页面会重定向导致 frame detached，忽略此错误
+                print(f"[RECORDER] 导航警告（可能是重定向）: {e}")
+
+            # 等待页面完全加载（包括重定向）
+            print(f"[RECORDER] 等待页面稳定...")
+            await asyncio.sleep(3)  # 等待 3 秒让所有重定向完成
+            await self._page.wait_for_load_state("domcontentloaded", timeout=10000)
+
+            # 记录最终的 URL 作为第一个导航步骤
+            final_url = self._page.url
+            print(f"[RECORDER] 页面最终 URL: {final_url}")
 
             self.status = "recording"
 
-            # 记录第一个导航步骤
-            await self._record_step({"action": "navigate", "url": url})
+            # 清空之前自动记录的导航步骤，只保留最终的
+            self.steps = []
+            self._step_counter = 0
+            await self._record_step({"action": "navigate", "url": final_url})
+
+            # 重新设置录制开始时间，忽略后续 5 秒内的自动导航
+            self._recording_start_time = time.time()
+
+            print(f"[RECORDER] 浏览器启动成功，开始录制")
 
             # 启动截图循环
             self._screenshot_task = asyncio.create_task(self._screenshot_loop())
@@ -152,15 +189,22 @@ class UIRecorder:
     def stop(self) -> list[dict]:
         """停止录制，返回录制的步骤（同步方法）"""
         self.status = "stopped"
-        if self._loop and self._loop.is_running():
-            # 在事件循环中执行清理
-            try:
-                future = asyncio.run_coroutine_threadsafe(self._stop_playwright(), self._loop)
-                future.result(timeout=5)
-            except Exception as e:
-                print(f"[RECORDER] 停止 Playwright 异常: {e}")
-            # 停止事件循环
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop:
+            if self._loop.is_running():
+                # 在事件循环中执行清理
+                try:
+                    future = asyncio.run_coroutine_threadsafe(self._stop_playwright(), self._loop)
+                    future.result(timeout=5)
+                except Exception as e:
+                    print(f"[RECORDER] 停止 Playwright 异常: {e}")
+                # 停止事件循环
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            else:
+                # 事件循环未运行，直接在当前线程执行清理
+                try:
+                    self._loop.run_until_complete(self._stop_playwright())
+                except Exception as e:
+                    print(f"[RECORDER] 停止 Playwright 异常: {e}")
         return self.steps
 
     async def _stop_playwright(self):
@@ -207,6 +251,13 @@ class UIRecorder:
             if not current_url or current_url == "about:blank":
                 print(f"[FRAME_NAVIGATED] 跳过: about:blank")
                 return
+
+            # 录制开始后的前 5 秒内，跳过自动重定向的导航
+            if hasattr(self, '_recording_start_time'):
+                elapsed = time.time() - self._recording_start_time
+                if elapsed < 5:
+                    print(f"[FRAME_NAVIGATED] 跳过: 录制开始后 {elapsed:.1f} 秒内的自动导航")
+                    return
 
             # 如果最后一步是 click，跳过导航记录（Vue 路由跳转等）
             if self.steps:
@@ -325,7 +376,7 @@ class UIRecorder:
             while self.status == "recording":
                 if self._page and self._screenshot_callback:
                     try:
-                        screenshot_bytes = await self._page.screenshot(type="jpeg", quality=60)
+                        screenshot_bytes = await self._page.screenshot(type="jpeg", quality=85)
                         screenshot = base64.b64encode(screenshot_bytes).decode("utf-8")
                         if screenshot:
                             # 回调可能是同步的
@@ -377,8 +428,8 @@ class UIRecorder:
         elif action == "mousedown":
             print(f"[MOUSE_EVENT] 执行 mousedown at ({x}, {y})")
             await self._page.mouse.move(x, y)
-            # 记录拖拽起点，但不执行 mouse.down()
-            # mouse.down() 会在 mouseup 时与 mouse.up() 一起执行，避免重复点击
+            await self._page.mouse.down()
+            # 记录拖拽起点
             self._drag_start = {"x": x, "y": y}
             self._drag_path = [{"x": x, "y": y}]
             print(f"[MOUSE_EVENT] mousedown 执行完成")
@@ -406,7 +457,7 @@ class UIRecorder:
                     })
                 self._drag_path = []
             elif is_click:
-                # 先获取元素信息（在执行 click 之前）
+                # 先获取元素信息
                 element_info = await self._get_element_at_point(x, y)
                 print(f"[MOUSE_EVENT] element_info: {element_info is not None}")
 
@@ -419,9 +470,12 @@ class UIRecorder:
                     if self._input_active:
                         await self._finish_input()
 
+                    # 先记录点击步骤（在执行 up 之前，避免导航事件先触发）
+                    await self._record_step({"action": "click", "target": element_info})
+
                     if is_input:
-                        # 执行 click
-                        await self._page.mouse.click(x, y)
+                        # 执行 up（mousedown 已经执行了 down）
+                        await self._page.mouse.up()
                         # 发送输入框信息给前端，弹出输入弹窗
                         if self._step_callback:
                             try:
@@ -435,20 +489,15 @@ class UIRecorder:
                                 pass
                         print(f"[INPUT] 检测到输入框，等待用户输入: {element_info.get('selector')}")
                     else:
-                        # 先记录点击步骤（在执行 click 之前，避免导航事件先触发）
-                        await self._record_step({"action": "click", "target": element_info})
-                        # 然后执行 click
-                        print(f"[MOUSE_EVENT] 执行 click at ({x}, {y})")
-                        try:
-                            await self._page.mouse.click(x, y)
-                            print(f"[MOUSE_EVENT] click 执行成功")
-                        except Exception as e:
-                            print(f"[MOUSE_EVENT] click 执行失败: {e}")
+                        # 执行 up（mousedown 已经执行了 down）
+                        print(f"[MOUSE_EVENT] 执行 mouseup at ({x}, {y})")
+                        await self._page.mouse.up()
+                        print(f"[MOUSE_EVENT] mouseup 执行成功")
                         # 点击后短暂延迟，让页面有时间响应（如下拉框展开）
                         await asyncio.sleep(0.3)
                 else:
-                    # 没有获取到元素信息，直接执行 click
-                    await self._page.mouse.click(x, y)
+                    # 没有获取到元素信息，直接执行 up
+                    await self._page.mouse.up()
             else:
                 # 普通 mouseup，清理拖拽路径
                 if hasattr(self, '_drag_path'):
@@ -708,10 +757,26 @@ class UIRecorder:
             logger.debug(f"获取元素信息失败: {e}")
             return None
 
+    def _parameterize_url(self, url: str) -> str:
+        """将 URL 中的 base_url 部分替换为 {{base_url}} 变量"""
+        if not self._base_url or not url:
+            return url
+        # 如果 URL 以 base_url 开头，替换为变量
+        if url.startswith(self._base_url):
+            path = url[len(self._base_url):]
+            if not path.startswith('/'):
+                path = '/' + path
+            return '{{base_url}}' + path
+        return url
+
     async def _record_step(self, step_data: dict):
         """记录一个操作步骤"""
         action = step_data.get("action")
         now = time.time() * 1000
+
+        # URL 参数化：将 base_url 替换为变量
+        if "url" in step_data and step_data["url"]:
+            step_data["url"] = self._parameterize_url(step_data["url"])
 
         print(f"[RECORD_STEP] 被调用: step_data={step_data}, 当前步骤数={len(self.steps)}")
 

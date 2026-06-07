@@ -1,85 +1,100 @@
 <template>
-  <div class="ui-case-list-page">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2>UI 用例管理</h2>
-        <a-select
-          v-model="selectedProjectId"
-          :loading="projectsLoading"
-          placeholder="选择项目"
-          style="width: 200px"
-          allow-search
-          @change="loadCases"
-        >
-          <a-option
-            v-for="p in projects"
-            :key="p.id"
-            :value="p.id"
-            :label="p.name"
-          />
-        </a-select>
-      </div>
-      <div class="header-right">
-        <a-button type="primary" @click="goToRecord">
-          <template #icon><icon-video-camera /></template>
-          录制新用例
-        </a-button>
-      </div>
-    </div>
+  <div class="ui-case-manage">
+    <a-layout style="height: 100%">
+      <!-- 左侧项目列表 -->
+      <a-layout-sider :width="260" class="project-sider">
+        <div class="sider-header">
+          <h3 class="sider-title">项目列表</h3>
+        </div>
+        <div class="sider-content">
+          <div class="project-list">
+            <div
+              v-for="p in projects"
+              :key="p.id"
+              class="project-item"
+              :class="{ active: selectedProjectId === p.id }"
+              @click="handleSelectProject(p.id)"
+            >
+              <icon-folder class="project-icon" />
+              <span class="project-name">{{ p.name }}</span>
+              <a-tag size="small" color="arcoblue">{{ getProjectCaseCount(p.id) }}</a-tag>
+            </div>
+            <div v-if="projects.length === 0" class="empty-tip">
+              暂无项目
+            </div>
+          </div>
+        </div>
+      </a-layout-sider>
 
-    <!-- 用例表格 -->
-    <div class="case-table-wrapper">
-      <a-table
-        :data="cases"
-        :loading="loading"
-        :pagination="pagination"
-        @page-change="onPageChange"
-        @page-size-change="onPageSizeChange"
-      >
-        <template #columns>
-          <a-table-column title="ID" data-index="id" :width="80" />
-          <a-table-column title="用例名称" data-index="name">
-            <template #cell="{ record }">
-              <a-link @click="viewCaseDetail(record)">{{ record.name }}</a-link>
+      <!-- 右侧用例列表 -->
+      <a-layout-content class="list-content">
+        <!-- 工具栏 -->
+        <div class="list-toolbar">
+          <div class="toolbar-left">
+            <h3 class="list-title">{{ currentProjectName || '请选择项目' }}</h3>
+          </div>
+          <div class="toolbar-right">
+            <a-button type="primary" @click="goToRecord">
+              <template #icon><icon-video-camera /></template>
+              录制新用例
+            </a-button>
+          </div>
+        </div>
+
+        <!-- 用例表格 -->
+        <div class="case-table-wrapper">
+          <a-table
+            :data="cases"
+            :loading="loading"
+            :pagination="pagination"
+            @page-change="onPageChange"
+            @page-size-change="onPageSizeChange"
+          >
+            <template #columns>
+              <a-table-column title="ID" data-index="id" :width="80" />
+              <a-table-column title="用例名称" data-index="name">
+                <template #cell="{ record }">
+                  <a-link @click="viewCaseDetail(record)">{{ record.name }}</a-link>
+                </template>
+              </a-table-column>
+              <a-table-column title="目标 URL" data-index="base_url" :ellipsis="true" />
+              <a-table-column title="步骤数" :width="100">
+                <template #cell="{ record }">
+                  <a-tag color="blue" size="small">{{ record.steps?.length || 0 }} 步</a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="创建时间" data-index="created_at" :width="180">
+                <template #cell="{ record }">
+                  {{ formatTime(record.created_at) }}
+                </template>
+              </a-table-column>
+              <a-table-column title="操作" :width="250" fixed="right">
+                <template #cell="{ record }">
+                  <a-space>
+                    <a-button type="text" size="mini" @click="viewCaseDetail(record)">
+                      查看
+                    </a-button>
+                    <a-button
+                      type="text"
+                      size="mini"
+                      status="success"
+                      :loading="runningCaseId === record.id"
+                      @click="handleRun(record)"
+                    >
+                      <template #icon><icon-play-arrow /></template>
+                      执行
+                    </a-button>
+                    <a-button type="text" size="mini" status="danger" @click="handleDelete(record)">
+                      删除
+                    </a-button>
+                  </a-space>
+                </template>
+              </a-table-column>
             </template>
-          </a-table-column>
-          <a-table-column title="目标 URL" data-index="base_url" :ellipsis="true" />
-          <a-table-column title="步骤数" :width="100">
-            <template #cell="{ record }">
-              <a-tag color="blue" size="small">{{ record.steps?.length || 0 }} 步</a-tag>
-            </template>
-          </a-table-column>
-          <a-table-column title="创建时间" data-index="created_at" :width="180">
-            <template #cell="{ record }">
-              {{ formatTime(record.created_at) }}
-            </template>
-          </a-table-column>
-          <a-table-column title="操作" :width="250" fixed="right">
-            <template #cell="{ record }">
-              <a-space>
-                <a-button type="text" size="mini" @click="viewCaseDetail(record)">
-                  查看
-                </a-button>
-                <a-button
-                  type="text"
-                  size="mini"
-                  status="success"
-                  :loading="runningCaseId === record.id"
-                  @click="handleRun(record)"
-                >
-                  <template #icon><icon-play-arrow /></template>
-                  执行
-                </a-button>
-                <a-button type="text" size="mini" status="danger" @click="handleDelete(record)">
-                  删除
-                </a-button>
-              </a-space>
-            </template>
-          </a-table-column>
-        </template>
-      </a-table>
-    </div>
+          </a-table>
+        </div>
+      </a-layout-content>
+    </a-layout>
 
     <!-- 用例详情弹窗 -->
     <a-modal
@@ -116,59 +131,19 @@
         </div>
       </div>
     </a-modal>
-
-    <!-- 执行结果弹窗 -->
-    <a-modal
-      v-model:visible="runResultVisible"
-      title="执行结果"
-      :width="800"
-      :footer="false"
-    >
-      <div class="run-result" v-if="runResult">
-        <!-- 执行统计 -->
-        <div class="result-summary">
-          <a-tag :color="runResult.status === 'completed' ? 'green' : 'red'" size="large">
-            {{ runResult.status === 'completed' ? '执行成功' : '执行失败' }}
-          </a-tag>
-          <span class="result-stats">
-            共 {{ runResult.total }} 步，
-            <span class="passed">{{ runResult.passed }} 通过</span>，
-            <span class="failed">{{ runResult.failed }} 失败</span>
-          </span>
-        </div>
-
-        <!-- 步骤详情 -->
-        <div class="result-steps">
-          <div
-            v-for="result in runResult.results"
-            :key="result.step"
-            class="result-step"
-            :class="{ 'step-success': result.success, 'step-failed': !result.success }"
-          >
-            <div class="step-header">
-              <a-tag :color="result.success ? 'green' : 'red'" size="small">
-                {{ result.step }}
-              </a-tag>
-              <span class="step-action">{{ getActionLabel(result.action) }}</span>
-              <span class="step-duration">{{ result.duration }}ms</span>
-            </div>
-            <div class="step-message">{{ result.message }}</div>
-            <div class="step-screenshot" v-if="result.screenshot">
-              <img :src="`data:image/jpeg;base64,${result.screenshot}`" alt="截图" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconVideoCamera, IconPlayArrow, IconClose } from '@arco-design/web-vue/es/icon'
+import {
+  IconVideoCamera,
+  IconPlayArrow,
+  IconFolder,
+} from '@arco-design/web-vue/es/icon'
 import { useRouter } from 'vue-router'
-import { getUICaseList, deleteUICase, runUICase, type UICase, type RunResult, type StepResult } from '@/api/uiCase'
+import { getUICaseList, deleteUICase, type UICase } from '@/api/uiCase'
 import { getProjects, type Project } from '@/api/project'
 
 const router = useRouter()
@@ -178,6 +153,7 @@ const router = useRouter()
 const projects = ref<Project[]>([])
 const selectedProjectId = ref<number | null>(null)
 const projectsLoading = ref(false)
+const projectCaseCounts = ref<Record<number, number>>({})
 
 const cases = ref<UICase[]>([])
 const loading = ref(false)
@@ -194,10 +170,32 @@ const detailCase = ref<UICase | null>(null)
 
 // 执行相关
 const runResultVisible = ref(false)
-const runResult = ref<RunResult | null>(null)
 const runningCaseId = ref<number | null>(null)
 
+// ========== 计算属性 ==========
+
+const currentProjectName = computed(() => {
+  const p = projects.value.find(p => p.id === selectedProjectId.value)
+  return p?.name || ''
+})
+
 // ========== 方法 ==========
+
+function getProjectCaseCount(projectId: number): number {
+  return projectCaseCounts.value[projectId] || 0
+}
+
+async function loadProjectCaseCounts() {
+  // 加载每个项目的用例数
+  for (const p of projects.value) {
+    try {
+      const res = await getUICaseList(p.id, 0, 1000)
+      projectCaseCounts.value[p.id] = res?.length || 0
+    } catch {
+      projectCaseCounts.value[p.id] = 0
+    }
+  }
+}
 
 async function loadProjects() {
   projectsLoading.value = true
@@ -207,11 +205,19 @@ async function loadProjects() {
     if (projects.value.length > 0 && !selectedProjectId.value) {
       selectedProjectId.value = projects.value[0].id
     }
+    // 加载每个项目的用例数
+    await loadProjectCaseCounts()
   } catch (err) {
     console.error('加载项目列表失败:', err)
   } finally {
     projectsLoading.value = false
   }
+}
+
+function handleSelectProject(projectId: number) {
+  selectedProjectId.value = projectId
+  pagination.value.current = 1
+  loadCases()
 }
 
 async function loadCases() {
@@ -222,7 +228,6 @@ async function loadCases() {
     const skip = (pagination.value.current - 1) * pagination.value.pageSize
     const res = await getUICaseList(selectedProjectId.value, skip, pagination.value.pageSize)
     cases.value = res || []
-    // TODO: 后端需要返回总数
     pagination.value.total = cases.value.length
   } catch (err) {
     console.error('加载用例列表失败:', err)
@@ -252,6 +257,10 @@ function viewCaseDetail(caseItem: UICase) {
   detailVisible.value = true
 }
 
+async function handleRun(caseItem: UICase) {
+  router.push(`/ui-run-debug/${caseItem.id}`)
+}
+
 async function handleDelete(caseItem: UICase) {
   Modal.confirm({
     title: '确认删除',
@@ -261,16 +270,15 @@ async function handleDelete(caseItem: UICase) {
         await deleteUICase(caseItem.id)
         Message.success('删除成功')
         loadCases()
+        // 更新项目用例数
+        if (selectedProjectId.value) {
+          projectCaseCounts.value[selectedProjectId.value] = Math.max(0, (projectCaseCounts.value[selectedProjectId.value] || 1) - 1)
+        }
       } catch (err) {
         Message.error('删除失败')
       }
     },
   })
-}
-
-async function handleRun(caseItem: UICase) {
-  // 跳转到执行调试页面
-  router.push(`/ui-run-debug/${caseItem.id}`)
 }
 
 function formatTime(time: string): string {
@@ -294,6 +302,7 @@ function getActionLabel(action: string): string {
     assert: '断言',
     drag: '拖拽',
     new_page: '新窗口',
+    go_back: '返回',
   }
   return map[action] || action
 }
@@ -315,6 +324,7 @@ function getStepColor(action: string): string {
 function getStepDesc(step: Record<string, unknown>): string {
   if (step.action === 'navigate') return step.url as string || ''
   if (step.action === 'new_page') return step.url as string || '新窗口'
+  if (step.action === 'go_back') return step.url as string || '返回上一页'
   if (step.action === 'type') {
     const target = step.target as Record<string, unknown> | undefined
     return `${target?.text || target?.selector || ''} → "${step.value}"`
@@ -339,30 +349,108 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.ui-case-list-page {
-  padding: 20px;
+.ui-case-manage {
+  height: calc(100vh - var(--header-height));
+  background: var(--gray-50);
+  margin: calc(-1 * var(--content-padding));
 }
 
-.page-header {
+.project-sider {
+  background: white !important;
+  border-right: 1px solid rgba(224, 212, 252, 0.25) !important;
+  box-shadow: 2px 0 8px rgba(99, 102, 241, 0.03);
+}
+
+.sider-header {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid rgba(224, 212, 252, 0.2);
+}
+
+.sider-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-800);
+}
+
+.sider-content {
+  padding: 12px 8px;
+  overflow-y: auto;
+  height: calc(100% - 60px);
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.project-item:hover {
+  background: var(--gray-100);
+}
+
+.project-item.active {
+  background: #e8f3ff;
+  color: #165DFF;
+}
+
+.project-icon {
+  font-size: 18px;
+  color: #86909c;
+}
+
+.project-item.active .project-icon {
+  color: #165DFF;
+}
+
+.project-name {
+  flex: 1;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-tip {
+  text-align: center;
+  color: #c9cdd4;
+  padding: 40px 0;
+  font-size: 13px;
+}
+
+.list-content {
+  padding: var(--content-padding);
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+}
+
+.list-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.header-left h2 {
+.list-title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-800);
 }
 
 .case-table-wrapper {
+  flex: 1;
   background: #fff;
   border-radius: 8px;
   padding: 16px;
@@ -478,6 +566,10 @@ onMounted(() => {
 .result-step .step-message {
   font-size: 13px;
   color: #4e5969;
+}
+
+.result-step .step-message.message-error {
+  color: #f53f3f;
 }
 
 .result-step .step-screenshot {

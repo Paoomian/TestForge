@@ -139,10 +139,14 @@ const handleBatchRunSuccess = (runId: number) => {
 
 .tree-content {
   padding: 12px 8px;
+  overflow-y: auto;
+  height: calc(100% - 60px);
 }
 
 .list-content {
   padding: var(--content-padding);
   background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
 }
 </style>

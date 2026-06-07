@@ -19,29 +19,43 @@ router = APIRouter()
 @router.post("/start", response_model=RecordingSession)
 def start_recording(
     request: RecordingStartRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("ui_test:write"))
 ):
     """启动录制会话"""
     recorder = recording_manager.create_session()
 
+    # 获取环境的 base_url
+    base_url = request.base_url
+    if request.environment_id and not base_url:
+        from models import Environment
+        env = db.query(Environment).filter(Environment.id == request.environment_id).first()
+        if env and env.base_url:
+            base_url = env.base_url
+
     try:
         # 启动浏览器并导航到目标URL（同步方法，内部启动线程）
         recorder.start(
             url=request.url,
+            base_url=base_url,
             viewport_width=request.viewport_width,
             viewport_height=request.viewport_height,
             user_agent=request.user_agent,
         )
 
-        # 等待浏览器启动完成
-        for _ in range(50):  # 最多等待5秒
+        # 等待浏览器启动完成（首次启动可能需要更长时间）
+        for _ in range(200):  # 最多等待20秒
             if recorder.status in ["recording", "stopped"]:
                 break
             time.sleep(0.1)
 
         if recorder.status != "recording":
+            error_msg = f"启动录制超时，当前状态: {recorder.status}"
+            print(f"[RECORDER] {error_msg}")
+            # 先停止录制，再删除会话
+            recorder.stop()
             recording_manager.remove_session(recorder.session_id)
-            raise HTTPException(status_code=500, detail="启动录制超时")
+            raise HTTPException(status_code=500, detail=error_msg)
 
         return RecordingSession(
             session_id=recorder.session_id,
@@ -69,7 +83,10 @@ def stop_recording(
         raise HTTPException(status_code=404, detail="录制会话不存在")
 
     # 停止录制，获取步骤
-    steps = recorder.stop()
+    recorder.stop()
+
+    # 优先使用前端传入的步骤，否则使用录制器中的步骤
+    steps = request.steps if request.steps else recorder.steps
 
     # 保存到数据库
     saved_case = None

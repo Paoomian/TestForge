@@ -18,6 +18,20 @@
         </span>
       </div>
       <div class="toolbar-right">
+        <a-select
+          v-model="selectedEnvironmentId"
+          :style="{ width: '160px' }"
+          placeholder="选择环境"
+          allow-clear
+          :disabled="isRunning"
+        >
+          <a-option
+            v-for="env in environments"
+            :key="env.id"
+            :value="env.id"
+            :label="env.name"
+          />
+        </a-select>
         <a-button
           v-if="isRunning"
           status="danger"
@@ -108,6 +122,7 @@ import {
   IconCloseCircle,
 } from '@arco-design/web-vue/es/icon'
 import { getUICase, type UICase, type UIStep } from '@/api/uiCase'
+import { getEnvironments, type Environment } from '@/api/environment'
 
 const route = useRoute()
 const router = useRouter()
@@ -118,6 +133,7 @@ const caseId = computed(() => Number(route.params.caseId))
 const caseName = ref('')
 const steps = ref<UIStep[]>([])
 const base_url = ref('')
+const caseProjectId = ref<number | null>(null)
 
 const ws = ref<WebSocket | null>(null)
 const canvasRef = ref<HTMLCanvasElement>()
@@ -127,6 +143,10 @@ const execStatus = ref('idle') // idle / running / completed
 const currentStep = ref(0)
 const totalSteps = ref(0)
 const stepResults = ref<Array<{ success: boolean; message: string; duration: number; done: boolean }>>([])
+
+// 环境相关
+const environments = ref<Environment[]>([])
+const selectedEnvironmentId = ref<number | undefined>(undefined)
 
 // ========== 计算属性 ==========
 
@@ -235,6 +255,7 @@ async function loadCase() {
     caseName.value = caseData.name
     steps.value = caseData.steps || []
     base_url.value = caseData.base_url || ''
+    caseProjectId.value = caseData.project_id
     totalSteps.value = steps.value.length
 
     // 初始化步骤结果
@@ -244,6 +265,12 @@ async function loadCase() {
       duration: 0,
       done: false,
     }))
+
+    // 加载环境列表
+    if (caseData.project_id) {
+      const envRes = await getEnvironments(caseData.project_id)
+      environments.value = envRes || []
+    }
   } catch (err) {
     Message.error('加载用例失败')
     router.back()
@@ -262,7 +289,10 @@ function handleStart() {
 
   // 建立 WebSocket 连接
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/ws/ui-run/${caseId.value}`
+  let wsUrl = `${protocol}//${window.location.host}/ws/ui-run/${caseId.value}`
+  if (selectedEnvironmentId.value) {
+    wsUrl += `?environment_id=${selectedEnvironmentId.value}`
+  }
   ws.value = new WebSocket(wsUrl)
 
   ws.value.onmessage = (event) => {

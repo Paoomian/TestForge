@@ -9,7 +9,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models import UICase
+from models import UICase, Environment
 from services.ui_executor import UIExecutor
 
 logger = logging.getLogger(__name__)
@@ -17,11 +17,11 @@ router = APIRouter()
 
 
 @router.websocket("/ws/ui-run/{case_id}")
-async def websocket_ui_run(websocket: WebSocket, case_id: int):
+async def websocket_ui_run(websocket: WebSocket, case_id: int, environment_id: int = None):
     """UI 用例执行 WebSocket 端点"""
     await websocket.accept()
 
-    # 获取用例
+    # 获取用例和环境变量
     db = SessionLocal()
     try:
         case = db.query(UICase).filter(UICase.id == case_id).first()
@@ -34,6 +34,16 @@ async def websocket_ui_run(websocket: WebSocket, case_id: int):
             await websocket.send_json({"type": "error", "message": "用例没有步骤"})
             await websocket.close()
             return
+
+        # 加载环境变量
+        base_url = ""
+        variables = {}
+        if environment_id:
+            env = db.query(Environment).filter(Environment.id == environment_id).first()
+            if env:
+                base_url = env.base_url or ""
+                variables = env.variables or {}
+                print(f"[WS_RUN] 加载环境: {env.name}, base_url: {base_url}")
     finally:
         db.close()
 
@@ -109,7 +119,8 @@ async def websocket_ui_run(websocket: WebSocket, case_id: int):
         # 启动执行
         executor.start(
             steps=case.steps,
-            base_url=case.base_url or "",
+            base_url=base_url or case.base_url or "",
+            variables=variables,
             viewport_width=1280,
             viewport_height=720,
             screenshot_callback=send_screenshot,

@@ -11,6 +11,7 @@ declare module 'vue' {
     AAvatar: typeof import('@arco-design/web-vue')['Avatar']
     ABadge: typeof import('@arco-design/web-vue')['Badge']
     AButton: typeof import('@arco-design/web-vue')['Button']
+    AButtonGroup: typeof import('@arco-design/web-vue')['ButtonGroup']
     ACard: typeof import('@arco-design/web-vue')['Card']
     ACheckbox: typeof import('@arco-design/web-vue')['Checkbox']
     ACheckboxGroup: typeof import('@arco-design/web-vue')['CheckboxGroup']

@@ -4,6 +4,36 @@
     <div class="record-toolbar">
       <div class="toolbar-left">
         <div class="url-input-group">
+          <a-select
+            v-model="selectedProjectId"
+            :style="{ width: '140px' }"
+            placeholder="选择项目"
+            allow-search
+            :disabled="isRecording"
+            @change="handleProjectChange"
+          >
+            <a-option
+              v-for="p in projects"
+              :key="p.id"
+              :value="p.id"
+              :label="p.name"
+            />
+          </a-select>
+          <a-select
+            v-model="selectedEnvironmentId"
+            :style="{ width: '140px' }"
+            placeholder="选择环境"
+            allow-clear
+            :disabled="isRecording"
+            @change="handleEnvironmentChange"
+          >
+            <a-option
+              v-for="env in environments"
+              :key="env.id"
+              :value="env.id"
+              :label="env.name"
+            />
+          </a-select>
           <a-input
             v-model="targetUrl"
             placeholder="输入要录制的网页 URL，如 https://example.com"
@@ -14,7 +44,7 @@
             <template #prefix><icon-link /></template>
           </a-input>
           <a-button
-            v-if="!isRecording"
+            v-if="!isRecording && !isPaused"
             type="primary"
             :disabled="!targetUrl"
             @click="handleStartRecording"
@@ -23,7 +53,23 @@
             开始录制
           </a-button>
           <a-button
-            v-else
+            v-if="isRecording && !isPaused"
+            status="warning"
+            @click="handlePauseRecording"
+          >
+            <template #icon><icon-pause /></template>
+            暂停
+          </a-button>
+          <a-button
+            v-if="isPaused"
+            type="primary"
+            @click="handleResumeRecording"
+          >
+            <template #icon><icon-play-arrow /></template>
+            继续
+          </a-button>
+          <a-button
+            v-if="isRecording || isPaused"
             status="danger"
             @click="handleStopRecording"
           >
@@ -50,6 +96,13 @@
         >
           <template #icon><icon-left /></template>
           返回上一页
+        </a-button>
+        <a-button
+          v-if="steps.length > 0 && !isRecording"
+          @click="handlePreview"
+        >
+          <template #icon><icon-play-arrow /></template>
+          预览
         </a-button>
         <a-button
           v-if="steps.length > 0 && !isRecording"
@@ -93,6 +146,8 @@
                 @select-step="handleSelectStep"
                 @delete-step="handleDeleteStep"
                 @clear-all="handleClearSteps"
+                @reorder="handleReorderSteps"
+                @insert-step="handleInsertStep"
               />
             </div>
           </a-tab-pane>
@@ -115,6 +170,7 @@
       @start-select="handleStartSelect"
       @reselect="handleStartSelect"
       @confirm="handleAddAssert"
+      @update:visible="handleAssertModalVisibleChange"
     />
 
     <!-- 保存用例弹窗 -->
@@ -154,7 +210,74 @@
       v-model:visible="inputModalVisible"
       :target="inputTarget"
       @confirm="handleInputConfirm"
+      @update:visible="handleInputModalVisibleChange"
     />
+
+    <!-- 预览弹窗 -->
+    <a-modal
+      v-model:visible="previewVisible"
+      title="录制预览"
+      :width="900"
+      :footer="false"
+      @close="stopPreview"
+    >
+      <div class="preview-container">
+        <!-- 预览内容 -->
+        <div class="preview-content">
+          <!-- 截图显示 -->
+          <div class="preview-screenshot">
+            <img
+              v-if="previewStep?.screenshot"
+              :src="`data:image/jpeg;base64,${previewStep.screenshot}`"
+              alt="步骤截图"
+            />
+            <div v-else class="preview-placeholder">
+              暂无截图
+            </div>
+          </div>
+
+          <!-- 步骤信息 -->
+          <div class="preview-info">
+            <div class="preview-step-action">
+              {{ previewStep ? getActionLabel(previewStep.action) : '' }}
+            </div>
+            <div class="preview-step-desc">
+              {{ previewStep ? getStepDesc(previewStep) : '' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 控制栏 -->
+        <div class="preview-controls">
+          <a-button-group>
+            <a-button
+              v-if="!previewPlaying"
+              type="primary"
+              @click="previewStepIndex === 0 ? startPreview() : resumePreview()"
+            >
+              <template #icon><icon-play-arrow /></template>
+              {{ previewStepIndex === 0 ? '开始' : '继续' }}
+            </a-button>
+            <a-button
+              v-else
+              @click="pausePreview"
+            >
+              <template #icon><icon-pause /></template>
+              暂停
+            </a-button>
+            <a-button @click="stopPreview">
+              <template #icon><icon-record-stop /></template>
+              停止
+            </a-button>
+          </a-button-group>
+
+          <!-- 进度 -->
+          <div class="preview-progress">
+            {{ previewStepIndex }} / {{ steps.length }}
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -168,6 +291,8 @@ import {
   IconSave,
   IconLeft,
   IconCheckCircle,
+  IconPause,
+  IconPlayArrow,
 } from '@arco-design/web-vue/es/icon'
 import BrowserPreview from './components/BrowserPreview.vue'
 import StepList from './components/StepList.vue'
@@ -181,6 +306,7 @@ import {
   type UIStep,
 } from '@/api/uiCase'
 import { getProjects } from '@/api/project'
+import { getEnvironments, type Environment } from '@/api/environment'
 
 // ========== 状态 ==========
 
@@ -192,6 +318,12 @@ const steps = ref<UIStep[]>([])
 const selectedStepIndex = ref(-1)
 const pageHistoryCount = ref(0) // 页面历史栈深度
 const browserLoading = ref(false) // 浏览器加载状态
+
+// 项目和环境相关
+const projects = ref<{ id: number; name: string }[]>([])
+const selectedProjectId = ref<number | undefined>(undefined)
+const environments = ref<Environment[]>([])
+const selectedEnvironmentId = ref<number | undefined>(undefined)
 
 // 元素选择模式
 const isSelectMode = ref(false)
@@ -211,8 +343,13 @@ const saveForm = ref({
   description: '',
   projectId: null as number | null,
 })
-const projects = ref<{ id: number; name: string }[]>([])
 const projectsLoading = ref(false)
+
+// 预览相关
+const previewVisible = ref(false)
+const previewStepIndex = ref(0)
+const previewPlaying = ref(false)
+let previewTimer: number | null = null
 
 // ========== 计算属性 ==========
 
@@ -220,8 +357,16 @@ const isRecording = computed(() =>
   recordingStatus.value === 'recording' || recordingStatus.value === 'paused'
 )
 
+const isPaused = computed(() => recordingStatus.value === 'paused')
+
 const selectedStep = computed(() =>
   selectedStepIndex.value >= 0 ? steps.value[selectedStepIndex.value] : null
+)
+
+const previewStep = computed(() =>
+  previewStepIndex.value > 0 && previewStepIndex.value <= steps.value.length
+    ? steps.value[previewStepIndex.value - 1]
+    : null
 )
 
 const hasPageHistory = computed(() => pageHistoryCount.value > 0)
@@ -268,7 +413,8 @@ async function handleStartRecording() {
     browserLoading.value = true
     const res = await startRecording({
       url,
-      project_id: 1, // 临时默认项目，后续从上下文获取
+      project_id: selectedProjectId.value || 1,
+      environment_id: selectedEnvironmentId.value,
       viewport_width: 1280,
       viewport_height: 720,
     })
@@ -303,6 +449,30 @@ async function handleStartRecording() {
     recordingStatus.value = 'idle'
     browserLoading.value = false
   }
+}
+
+function handlePauseRecording() {
+  recordingStatus.value = 'paused'
+  // 通知后端暂停录制
+  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+    ws.value.send(JSON.stringify({
+      type: 'command',
+      action: 'pause',
+    }))
+  }
+  Message.info('录制已暂停')
+}
+
+function handleResumeRecording() {
+  recordingStatus.value = 'recording'
+  // 通知后端恢复录制
+  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+    ws.value.send(JSON.stringify({
+      type: 'command',
+      action: 'resume',
+    }))
+  }
+  Message.success('录制已恢复')
 }
 
 async function handleStopRecording() {
@@ -348,6 +518,151 @@ function handleStepUpdated(step: UIStep) {
   }
 }
 
+function handleReorderSteps(fromIndex: number, toIndex: number) {
+  // 重新排序步骤
+  const newSteps = [...steps.value]
+  const [movedStep] = newSteps.splice(fromIndex, 1)
+  newSteps.splice(toIndex, 0, movedStep)
+  // 更新 order 字段
+  newSteps.forEach((step, index) => {
+    step.order = index + 1
+  })
+  steps.value = newSteps
+  // 更新选中的步骤索引
+  if (selectedStepIndex.value === fromIndex) {
+    selectedStepIndex.value = toIndex
+  }
+}
+
+function handleInsertStep(afterIndex: number, action: string) {
+  // 创建新步骤
+  const newStep: UIStep = {
+    id: `step_${Date.now()}`,
+    order: afterIndex + 2,
+    action: action,
+    timestamp: Date.now(),
+  } as UIStep
+
+  // 根据 action 类型设置默认值
+  if (action === 'navigate') {
+    newStep.url = ''
+  } else if (action === 'type') {
+    newStep.value = ''
+    newStep.target = { selector: '', text: '' }
+  } else if (action === 'press') {
+    newStep.key = 'Enter'
+  } else if (action === 'wait') {
+    ;(newStep as any).waitMs = 1000
+  } else if (action === 'assert') {
+    ;(newStep as any).type = 'text_equals'
+    ;(newStep as any).expected = ''
+    ;(newStep as any).selector = ''
+  } else {
+    newStep.target = { selector: '', text: '' }
+  }
+
+  // 插入到指定位置
+  const newSteps = [...steps.value]
+  newSteps.splice(afterIndex + 1, 0, newStep)
+  // 更新 order 字段
+  newSteps.forEach((step, index) => {
+    step.order = index + 1
+  })
+  steps.value = newSteps
+  // 选中新插入的步骤
+  selectedStepIndex.value = afterIndex + 1
+
+  Message.success(`已插入${getActionLabel(action)}步骤`)
+}
+
+function getActionLabel(action: string): string {
+  const map: Record<string, string> = {
+    navigate: '导航',
+    click: '点击',
+    type: '输入',
+    press: '按键',
+    wait: '等待',
+    assert: '断言',
+    drag: '拖拽',
+    scroll: '滚动',
+    new_page: '新窗口',
+    go_back: '返回',
+  }
+  return map[action] || action
+}
+
+function getStepDesc(step: UIStep): string {
+  if (step.action === 'navigate') return step.url || ''
+  if (step.action === 'new_page') return step.url || '新窗口'
+  if (step.action === 'go_back') return step.url || '返回上一页'
+  if (step.action === 'type') {
+    return `${step.target?.text || step.target?.selector || ''} → "${step.value}"`
+  }
+  if (step.action === 'press') return step.key || ''
+  if (step.action === 'wait') {
+    const waitMs = (step as Record<string, unknown>).waitMs as number || step.waitBefore || 0
+    return `${waitMs}ms`
+  }
+  if (step.action === 'drag') {
+    const from = step.from as { x: number; y: number } | undefined
+    const to = step.to as { x: number; y: number } | undefined
+    if (from && to) return `(${from.x},${from.y}) → (${to.x},${to.y})`
+    return '拖拽'
+  }
+  if (step.target) {
+    return step.target.text || step.target.selector || ''
+  }
+  return ''
+}
+
+function handlePreview() {
+  previewVisible.value = true
+  previewStepIndex.value = 0
+  previewPlaying.value = false
+}
+
+function startPreview() {
+  previewPlaying.value = true
+  previewStepIndex.value = 0
+  playNextStep()
+}
+
+function pausePreview() {
+  previewPlaying.value = false
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+    previewTimer = null
+  }
+}
+
+function resumePreview() {
+  previewPlaying.value = true
+  playNextStep()
+}
+
+function stopPreview() {
+  previewPlaying.value = false
+  previewStepIndex.value = 0
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+    previewTimer = null
+  }
+}
+
+function playNextStep() {
+  if (!previewPlaying.value || previewStepIndex.value >= steps.value.length) {
+    previewPlaying.value = false
+    return
+  }
+
+  previewStepIndex.value++
+
+  // 等待一段时间后播放下一步
+  previewTimer = window.setTimeout(() => {
+    playNextStep()
+  }, 1500) // 每步 1.5 秒
+}
+
 function handleGoBack() {
   if (ws.value && ws.value.readyState === WebSocket.OPEN) {
     ws.value.send(JSON.stringify({
@@ -380,7 +695,10 @@ function handleClearSteps() {
 function handleUpdateStep(updatedStep: UIStep) {
   const index = steps.value.findIndex(s => s.id === updatedStep.id)
   if (index >= 0) {
-    steps.value[index] = updatedStep
+    // 使用展开运算符创建新数组，确保触发响应式更新
+    const newSteps = [...steps.value]
+    newSteps[index] = updatedStep
+    steps.value = newSteps
   }
 }
 
@@ -394,12 +712,20 @@ function handleElementSelected(element: Record<string, unknown>) {
   // 元素被选中
   selectedElement.value = element
   isSelectMode.value = false
+  // 关闭输入弹窗（如果打开的话）
+  inputModalVisible.value = false
+  inputTarget.value = null
+  // 打开断言弹窗
   assertModalVisible.value = true
 }
 
 function handleInputTarget(target: Record<string, unknown>) {
   // 收到输入框信息，弹出输入弹窗
   inputTarget.value = target
+  // 关闭断言弹窗（如果打开的话）
+  assertModalVisible.value = false
+  selectedElement.value = null
+  // 打开输入弹窗
   inputModalVisible.value = true
 }
 
@@ -429,19 +755,60 @@ function handleInputConfirm(value: string) {
   inputTarget.value = null
 }
 
+function handleInputModalVisibleChange(visible: boolean) {
+  if (!visible) {
+    // 关闭弹窗时清除数据
+    inputTarget.value = null
+  }
+}
+
+function handleAssertModalVisibleChange(visible: boolean) {
+  if (!visible) {
+    // 关闭弹窗时清除数据
+    selectedElement.value = null
+  }
+}
+
 async function loadProjects() {
-  projectsLoading.value = true
   try {
     const res = await getProjects()
     projects.value = res || []
     // 默认选中第一个项目
-    if (projects.value.length > 0 && !saveForm.value.projectId) {
+    if (projects.value.length > 0 && !selectedProjectId.value) {
+      selectedProjectId.value = projects.value[0].id
       saveForm.value.projectId = projects.value[0].id
+      // 加载第一个项目的环境列表
+      await loadEnvironments(projects.value[0].id)
     }
   } catch (err) {
     console.error('加载项目列表失败:', err)
-  } finally {
-    projectsLoading.value = false
+  }
+}
+
+async function loadEnvironments(projectId: number) {
+  try {
+    const res = await getEnvironments(projectId)
+    environments.value = res || []
+    // 清空已选环境
+    selectedEnvironmentId.value = undefined
+  } catch (err) {
+    console.error('加载环境列表失败:', err)
+  }
+}
+
+function handleProjectChange(projectId: number) {
+  // 切换项目时重新加载环境列表
+  loadEnvironments(projectId)
+  saveForm.value.projectId = projectId
+}
+
+function handleEnvironmentChange(envId: number | undefined) {
+  // 选择环境后自动填充 base_url
+  if (envId) {
+    const env = environments.value.find(e => e.id === envId)
+    if (env && env.base_url) {
+      targetUrl.value = env.base_url
+    }
   }
 }
 
@@ -467,6 +834,7 @@ async function handleConfirmSave() {
       description: saveForm.value.description,
       project_id: saveForm.value.projectId,
       save_to_project: true,
+      steps: steps.value,  // 传入前端修改后的步骤
     })
 
     Message.success('用例保存成功')
@@ -501,6 +869,23 @@ onUnmounted(() => {
   flex-direction: column;
   height: calc(100vh - 60px);
   background: #f7f8fa;
+  overflow: hidden;
+  margin: -20px;  /* 抵消 content-wrapper 的 padding */
+}
+
+/* 覆盖父布局的 overflow 设置 */
+:deep(.layout-content) {
+  overflow: hidden !important;
+}
+
+:deep(.content-wrapper) {
+  min-height: auto !important;
+  height: calc(100vh - 60px) !important;
+  overflow: hidden !important;
+}
+
+.ui-record-page :deep(.step-items) {
+  overflow-y: auto !important;  /* 只允许步骤列表滚动 */
 }
 
 .record-toolbar {
@@ -539,11 +924,13 @@ onUnmounted(() => {
   gap: 12px;
   padding: 12px;
   overflow: hidden;
+  min-height: 0;  /* 确保 flex 子元素可以正确滚动 */
 }
 
 .content-left {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .content-right {
@@ -551,6 +938,9 @@ onUnmounted(() => {
   flex-shrink: 0;
   height: 100%;
   overflow: hidden;
+  min-height: 0;  /* 确保 flex 子元素可以正确滚动 */
+  display: flex;
+  flex-direction: column;
 }
 
 .right-tabs {
@@ -588,5 +978,73 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 预览弹窗样式 */
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preview-content {
+  display: flex;
+  gap: 16px;
+}
+
+.preview-screenshot {
+  flex: 1;
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-screenshot img {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+}
+
+.preview-placeholder {
+  color: #86909c;
+  font-size: 14px;
+}
+
+.preview-info {
+  width: 250px;
+  flex-shrink: 0;
+  background: #f7f8fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.preview-step-action {
+  font-size: 16px;
+  font-weight: 600;
+  color: #165DFF;
+  margin-bottom: 8px;
+}
+
+.preview-step-desc {
+  font-size: 14px;
+  color: #4e5969;
+  word-break: break-all;
+}
+
+.preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid #e5e6eb;
+}
+
+.preview-progress {
+  font-size: 14px;
+  color: #86909c;
 }
 </style>
