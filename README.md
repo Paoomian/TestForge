@@ -1,12 +1,12 @@
 # TestForge 测试平台
 
-一站式测试平台，覆盖接口自动化测试与 UI 自动化测试。
+一站式智能测试平台，覆盖 **UI 自动化测试**、**接口自动化测试**、**AI 生成用例**、**接口调试** 和 **开发工具箱**，助力团队高效保障软件质量。
 
 ## 功能特性
 
 ### UI 自动化测试
 
-#### 录制回放
+#### 用例录制
 
 - 嵌入式浏览器录制，在平台内直接操作目标网页
 - 实时截图流展示，所见即所得
@@ -20,6 +20,7 @@
 - 输入框点击弹出输入弹窗，避免误录制
 - 断言功能：选择元素后添加多种断言类型
 - URL 参数化：选择环境后自动替换为变量，支持多环境复用
+- <img width="2559" height="1599" alt="UI自动化-脚本录制" src="https://github.com/user-attachments/assets/a35dd20b-8a9b-4916-b4fe-db59eaf2b048" />
 
 #### 用例管理
 
@@ -36,6 +37,7 @@
 - 失败步骤自动截图
 - 支持环境变量替换（多环境执行）
 - 执行结果统计（通过率、耗时）
+- <img width="2559" height="1599" alt="UI自动化-用例执行" src="https://github.com/user-attachments/assets/6f09002e-07d8-4af6-873a-597845a7f6ad" />
 
 ---
 
@@ -49,6 +51,7 @@
 - 用例模板功能，快速创建相似用例
 - 断言配置（状态码 / JSONPath / 响应头 / 响应时间）
 - 前置/后置脚本（PyMiniRacer 沙箱，5 秒超时保护）
+- <img width="2559" height="1599" alt="接口自动化-用例管理" src="https://github.com/user-attachments/assets/60ab32cf-0875-4f24-8c60-7a564b850ea2" />
 
 #### 场景编排引擎
 
@@ -56,6 +59,7 @@
 - 4 种节点类型：接口调用 / 条件判断 / 等待延时 / 数据赋值
 - 条件分支 Y 形可视化，真/假双列展示，活跃分支高亮
 - 节点间变量传递，上游提取自动注入下游请求
+- <img width="2559" height="1599" alt="接口自动化-场景编排" src="https://github.com/user-attachments/assets/3cbdce60-b5a9-49bc-8c49-ee917775e1b0" />
 
 #### 数据规则引擎
 
@@ -69,6 +73,7 @@
 - 编排模式通过率智能计算（跳过节点不计入分母）
 - 场景编排专属报告：流程图 + 节点详情面板
 - 性能统计（P50 / P90 / P95、Top5 慢接口）
+- <img width="2559" height="1599" alt="接口自动化-任务执行结果" src="https://github.com/user-attachments/assets/267804f5-c9c5-4db8-bb29-59a2686a3066" />
 
 #### 接口调试
 
@@ -87,6 +92,7 @@
 - **PRD 文档**：上传 `.docx` / `.pdf` / `.md` 格式的需求文档
 - **接口文档**：上传 `.json` / `.yaml` 格式的 Swagger/OpenAPI 文档
 - **文本输入**：直接粘贴需求描述或接口定义
+- <img width="2559" height="1599" alt="AI生成用例png" src="https://github.com/user-attachments/assets/93b17eea-84a2-4bc9-967b-5a2d9831c942" />
 
 #### 生成能力
 
@@ -94,18 +100,14 @@
 - **接口测试用例**：覆盖正向调用、参数校验、边界值、认证鉴权
 - **Skill 技能系统**：可复用的 Prompt 模板，支持自定义技能，内置功能/接口测试专家默认技能
 - **多模型支持**：OpenAI / Claude / DeepSeek / 自定义兼容端点（中转站、Ollama 等）
+- <img width="2559" height="1599" alt="AI生成用例管理技能Prompt" src="https://github.com/user-attachments/assets/c4b048d1-f680-4516-9d48-8d95af9564e4" />
 
 #### 结果处理
 
 - 在线编辑生成的用例，支持全选/批量操作
 - 导出为 Excel（格式与导入模板一致）
 - 接口测试用例一键保存到项目（自动生成编号、按模块分组）
-
-#### 任务管理
-
-- Celery 异步执行，带实时进度追踪
-- 支持重试失败任务、取消进行中任务
-- AI 响应多重容错解析（代码块提取、截断修复、引号转义等）
+- <img width="2551" height="1599" alt="AI生成用例结果" src="https://github.com/user-attachments/assets/63e30d0b-82ef-4828-9e94-bc1ac2eeb24e" />
 
 ---
 
@@ -118,6 +120,7 @@
 - **哈希加密**：MD5 / SHA1 / SHA256 计算、JWT 解析、AES/DES 加解密
 - **生成工具**：UUID、随机字符串、测试数据（姓名/手机/身份证等）、二维码
 - **时间转换**：时间戳互转、Cron 表达式生成、进制转换
+- <img width="2559" height="1599" alt="常用工具JSON格式化" src="https://github.com/user-attachments/assets/33a251a0-8df9-4456-b00f-76a632f4d650" />
 
 ## 技术栈
 
@@ -225,6 +228,6 @@ TestForge/
 └── docs/                          # 文档
 ```
 
-## 许可证
+## 作者
 
-MIT License
+By：Zzh（Paoomian）

@@ -29,13 +29,91 @@ import JsonViewer from '@/components/JsonViewer.vue'
 const input = ref('')
 const output = ref<any>(null)
 
+/**
+ * 预处理 JSON 字符串，修复常见格式问题
+ * - Infinity / -Infinity / NaN → null
+ * - 修复字符串中的未转义引号和反斜杠
+ */
+function preprocessJson(str: string): string {
+  // 1. 替换 Infinity 和 NaN 为 null
+  let result = str
+    .replace(/\bInfinity\b/g, 'null')
+    .replace(/-Infinity\b/g, 'null')
+    .replace(/\bNaN\b/g, 'null')
+
+  // 2. 尝试直接解析，如果成功则直接返回
+  try {
+    JSON.parse(result)
+    return result
+  } catch {
+    // 解析失败，尝试修复
+  }
+
+  // 3. 逐字符状态机修复字符串中的特殊字符
+  const fixed: string[] = []
+  let inString = false
+  let i = 0
+
+  while (i < result.length) {
+    const ch = result[i]
+
+    if (ch === '"') {
+      if (!inString) {
+        // 进入字符串
+        inString = true
+        fixed.push(ch)
+        i++
+        continue
+      }
+
+      // 在字符串内遇到引号，判断是否真正结束
+      const next = result[i + 1]
+      if (next === ',' || next === '}' || next === ']' || next === ':' ||
+          next === ' ' || next === '\n' || next === '\r' || next === '\t' ||
+          next === undefined) {
+        // 真正结束字符串
+        inString = false
+        fixed.push(ch)
+      } else {
+        // 字符串内的未转义引号，转义它
+        fixed.push('\\"')
+      }
+      i++
+      continue
+    }
+
+    // 字符串内的反斜杠处理
+    if (ch === '\\' && inString) {
+      const next = result[i + 1]
+      // 检查是否是有效的转义字符
+      const validEscapes = ['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u']
+      if (next && validEscapes.includes(next)) {
+        // 有效转义，保留原样
+        fixed.push(ch)
+        fixed.push(next)
+        i += 2
+      } else {
+        // 无效转义，将反斜杠转义为 \\
+        fixed.push('\\\\')
+        i++
+      }
+      continue
+    }
+
+    fixed.push(ch)
+    i++
+  }
+
+  return fixed.join('')
+}
+
 function format() {
   if (!input.value.trim()) {
     Message.warning('请输入JSON内容')
     return
   }
   try {
-    output.value = JSON.parse(input.value)
+    output.value = JSON.parse(preprocessJson(input.value))
   } catch (e: any) {
     Message.error(`JSON解析错误: ${e.message}`)
   }
@@ -47,7 +125,7 @@ function compress() {
     return
   }
   try {
-    output.value = JSON.stringify(JSON.parse(input.value))
+    output.value = JSON.stringify(JSON.parse(preprocessJson(input.value)))
   } catch (e: any) {
     Message.error(`JSON解析错误: ${e.message}`)
   }
