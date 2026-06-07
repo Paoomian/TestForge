@@ -10,16 +10,32 @@
 
 - 嵌入式浏览器录制，在平台内直接操作目标网页
 - 实时截图流展示，所见即所得
-- 自动捕获操作：点击、输入、导航、按键等
+- 自动捕获操作：点击、输入、导航、按键、拖拽、滚动等
 - 智能元素定位：自动生成 CSS Selector 和 XPath
-- 录制步骤在线编辑，支持增删改查
-- 用例一键保存到项目，支持导出
+- **录制暂停/恢复**：暂停录制做准备工作，再继续
+- **步骤插入**：在任意位置插入新步骤（导航/点击/输入/按键/等待/断言）
+- **步骤拖拽排序**：拖拽调整步骤执行顺序
+- **步骤编辑**：修改已录制步骤的参数，实时生效
+- **录制回放预览**：录制完成后预览回放效果
+- 输入框点击弹出输入弹窗，避免误录制
+- 断言功能：选择元素后添加多种断言类型
+- URL 参数化：选择环境后自动替换为变量，支持多环境复用
 
 #### 用例管理
 
-- 用例列表按项目分组，支持搜索筛选
+- 左侧项目树 + 右侧用例列表布局
+- 用例列表按项目分组，显示用例数量
 - 步骤详情查看，时间线展示执行流程
 - 用例编辑与删除
+- 单用例调试执行，实时显示执行画面
+
+#### 执行调试
+
+- 嵌入式浏览器实时执行画面
+- 逐步显示执行状态（成功/失败）
+- 失败步骤自动截图
+- 支持环境变量替换（多环境执行）
+- 执行结果统计（通过率、耗时）
 
 ---
 
@@ -105,7 +121,7 @@
 
 ## 技术栈
 
-**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · httpx · PyMiniRacer · OpenAI SDK
+**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · Playwright · httpx · PyMiniRacer · OpenAI SDK
 
 **前端** | Vue 3 · TypeScript · Arco Design Vue · Pinia · ECharts · xlsx · ExcelJS
 
@@ -165,20 +181,48 @@ npm run dev
 
 ```
 TestForge/
-├── server/                     # 后端
-│   ├── api/                   # API 路由
-│   ├── models/                # 数据模型
-│   ├── schemas/               # Pydantic 模型
-│   ├── services/              # 业务服务（执行引擎）
-│   ├── tasks/                 # Celery 任务
-│   └── migrations/            # 数据库迁移
-├── frontend/                  # 前端
+├── server/                          # 后端
+│   ├── api/                        # API 路由
+│   │   ├── auth.py                # 认证授权
+│   │   ├── projects.py            # 项目管理
+│   │   ├── api_cases.py           # 接口用例 CRUD
+│   │   ├── ui_cases.py            # UI 用例 CRUD
+│   │   ├── ui_recordings.py       # UI 录制会话管理
+│   │   ├── ui_runner.py           # UI 用例执行 API
+│   │   ├── ws_ui_record.py        # 录制 WebSocket 端点
+│   │   ├── ws_ui_run.py           # 执行 WebSocket 端点
+│   │   ├── ai_generate.py         # AI 生成用例
+│   │   └── ...
+│   ├── models/                    # 数据模型
+│   ├── schemas/                   # Pydantic 模型
+│   ├── services/                  # 业务服务
+│   │   ├── ui_recorder.py         # UI 录制核心服务（Playwright）
+│   │   ├── ui_executor.py         # UI 用例执行器
+│   │   ├── scene_runner.py        # 场景编排执行引擎
+│   │   ├── ai_service.py          # AI 模型调用
+│   │   └── ...
+│   ├── tasks/                     # Celery 任务
+│   └── migrations/                # 数据库迁移
+├── frontend/                      # 前端
 │   └── src/
-│       ├── api/              # API 封装
-│       ├── components/       # 通用组件
-│       ├── views/            # 页面
-│       └── stores/           # 状态管理
-└── docs/                      # 文档
+│       ├── api/                  # API 封装
+│       │   ├── uiCase.ts         # UI 用例 + 录制 API
+│       │   ├── apiTestCase.ts    # 接口用例 API
+│       │   └── ...
+│       ├── components/           # 通用组件
+│       ├── views/
+│       │   ├── ui-test/          # UI 自动化
+│       │   │   ├── Record.vue    # 录制页面
+│       │   │   ├── CaseList.vue  # 用例管理
+│       │   │   ├── RunDebug.vue  # 执行调试
+│       │   │   └── components/   # 子组件
+│       │   ├── api-test/         # 接口自动化
+│       │   ├── ai-generate/      # AI 生成
+│       │   └── ...
+│       ├── layouts/              # 布局组件
+│       ├── stores/               # 状态管理
+│       └── router/               # 路由配置
+└── docs/                          # 文档
 ```
 
 ## 许可证
