@@ -55,6 +55,9 @@
               <a-tag v-if="d.status === 'device'" color="green" size="small">在线</a-tag>
               <a-tag v-else color="red" size="small">{{ d.status }}</a-tag>
             </a-option>
+            <template #empty>
+              <div class="select-empty">暂无可用设备</div>
+            </template>
           </a-select>
           <div v-if="devices.length === 0 && !deviceLoading" class="empty-tip">
             未检测到设备，请确认 USB 调试已开启
@@ -97,6 +100,39 @@
           <div class="section-title">
             事件类型百分比
             <span class="pct-total">总和: {{ pctTotal }}%</span>
+          </div>
+          <!-- 预设管理 -->
+          <div class="preset-bar">
+            <a-select
+              v-model="selectedPreset"
+              placeholder="选择预设配置"
+              allow-clear
+              :loading="presetLoading"
+              style="flex: 1"
+              @change="applyPreset"
+            >
+              <a-option v-for="p in defaultPresets" :key="p.id" :value="p.id">
+                ⭐ {{ p.name }}
+              </a-option>
+              <a-option v-for="p in userPresets" :key="p.id" :value="p.id">
+                📋 {{ p.name }}
+              </a-option>
+              <template #empty>
+                <div class="select-empty">暂无预设配置</div>
+              </template>
+            </a-select>
+            <a-button type="outline" size="small" @click="openSaveDialog">
+              <template #icon><icon-save /></template>
+              保存
+            </a-button>
+            <a-button
+              type="outline"
+              size="small"
+              status="danger"
+              @click="handleDeletePreset"
+            >
+              <template #icon><icon-delete /></template>
+            </a-button>
           </div>
           <div class="pct-grid">
             <div v-for="item in pctFields" :key="item.key" class="pct-item">
@@ -144,20 +180,50 @@
         </div>
       </div>
     </div>
+
+    <!-- 保存预设对话框 -->
+    <a-modal
+      v-model:visible="saveDialogVisible"
+      title="保存预设配置"
+      @ok="handleSavePreset"
+      :mask-closable="false"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="配置名称" required>
+          <a-input
+            v-model="savePresetName"
+            placeholder="请输入配置名称"
+            :max-length="100"
+            allow-clear
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { Message } from '@arco-design/web-vue'
-import { IconRefresh, IconPlayArrow, IconRecordStop, IconClockCircle, IconDownload } from '@arco-design/web-vue/es/icon'
-import { getDevices, startMonkey, stopMonkey } from '@/api/monkey'
-import type { DeviceInfo, MonkeyConfig } from '@/api/monkey'
+import { Message, Modal } from '@arco-design/web-vue'
+import { IconRefresh, IconPlayArrow, IconRecordStop, IconClockCircle, IconDownload, IconSave, IconDelete } from '@arco-design/web-vue/es/icon'
+import { getDevices, startMonkey, stopMonkey, getDefaultMonkeyPresets, getMonkeyPresets, createMonkeyPreset, deleteMonkeyPreset } from '@/api/monkey'
+import type { DeviceInfo, MonkeyConfig, MonkeyPreset } from '@/api/monkey'
 
 // 设备相关
 const devices = ref<DeviceInfo[]>([])
 const selectedDevice = ref<string>('')
 const deviceLoading = ref(false)
+
+// 预设相关
+const defaultPresets = ref<MonkeyPreset[]>([])
+const userPresets = ref<MonkeyPreset[]>([])
+const selectedPreset = ref<number | null>(null)
+const presetLoading = ref(false)
+const saveDialogVisible = ref(false)
+const savePresetName = ref('')
+
+// 合并预设列表用于显示
+const allPresets = computed(() => [...defaultPresets.value, ...userPresets.value])
 
 // 配置
 const config = reactive<MonkeyConfig>({
@@ -227,6 +293,107 @@ async function refreshDevices() {
   } finally {
     deviceLoading.value = false
   }
+}
+
+// 加载预设列表
+async function loadPresets() {
+  presetLoading.value = true
+  try {
+    const [defaults, userPresetList] = await Promise.all([
+      getDefaultMonkeyPresets(),
+      getMonkeyPresets(),
+    ])
+    // 为默认预设添加标识
+    defaultPresets.value = defaults.map(p => ({ ...p, isDefault: true }))
+    userPresets.value = userPresetList
+  } catch (e: any) {
+    Message.error(e?.detail || '获取预设列表失败')
+  } finally {
+    presetLoading.value = false
+  }
+}
+
+// 应用预设
+function applyPreset(presetId: number | null) {
+  if (!presetId) return
+  const preset = allPresets.value.find(p => p.id === presetId)
+  if (!preset) return
+  // 填充配置
+  config.pct_touch = preset.pct_touch
+  config.pct_motion = preset.pct_motion
+  config.pct_trackball = preset.pct_trackball
+  config.pct_nav = preset.pct_nav
+  config.pct_majornav = preset.pct_majornav
+  config.pct_syskeys = preset.pct_syskeys
+  config.pct_appswitch = preset.pct_appswitch
+  config.pct_anyevent = preset.pct_anyevent
+  config.event_count = preset.event_count
+  config.interval = preset.interval
+  Message.success(`已加载预设: ${preset.name}`)
+}
+
+// 打开保存对话框
+function openSaveDialog() {
+  savePresetName.value = ''
+  saveDialogVisible.value = true
+}
+
+// 保存预设
+async function handleSavePreset() {
+  if (!savePresetName.value.trim()) {
+    Message.warning('请输入配置名称')
+    return
+  }
+  try {
+    await createMonkeyPreset({
+      name: savePresetName.value.trim(),
+      pct_touch: config.pct_touch,
+      pct_motion: config.pct_motion,
+      pct_trackball: config.pct_trackball,
+      pct_nav: config.pct_nav,
+      pct_majornav: config.pct_majornav,
+      pct_syskeys: config.pct_syskeys,
+      pct_appswitch: config.pct_appswitch,
+      pct_anyevent: config.pct_anyevent,
+      event_count: config.event_count,
+      interval: config.interval,
+    })
+    Message.success('预设已保存')
+    saveDialogVisible.value = false
+    loadPresets()
+  } catch (e: any) {
+    Message.error(e?.detail || '保存失败')
+  }
+}
+
+// 删除预设
+async function handleDeletePreset() {
+  if (!selectedPreset.value) {
+    Message.warning('请先选择要删除的预设')
+    return
+  }
+  // 不允许删除默认预设（id 为负数）
+  if (selectedPreset.value < 0) {
+    Message.warning('默认预设不能删除')
+    return
+  }
+  const preset = userPresets.value.find(p => p.id === selectedPreset.value)
+  if (!preset) return
+
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定删除预设「${preset.name}」吗？`,
+    onOk: async () => {
+      try {
+        await deleteMonkeyPreset(selectedPreset.value!)
+        Message.success('已删除')
+        selectedPreset.value = null
+        loadPresets()
+      } catch (e: any) {
+        Message.error(e?.detail || '删除失败')
+      }
+    },
+  })
 }
 
 // 启动 Monkey 测试
@@ -326,6 +493,7 @@ function connectWebSocket(tid: string) {
 
 onMounted(() => {
   refreshDevices()
+  loadPresets()
 })
 
 onBeforeUnmount(() => {
@@ -441,6 +609,20 @@ onBeforeUnmount(() => {
   margin-top: 8px;
 }
 
+.select-empty {
+  padding: 16px 0;
+  text-align: center;
+  color: var(--color-text-3);
+  font-size: 13px;
+}
+
+.preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .estimated-time {
   display: flex;
   align-items: center;
@@ -485,6 +667,12 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1.6;
   background: var(--color-bg-1);
+}
+
+.log-content:has(.arco-empty) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .log-line {

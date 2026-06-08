@@ -110,8 +110,8 @@
             <template #icon>
               <icon-tool />
             </template>
-            <template #title>常用工具</template>
-            <a-menu-item key="tools">工具目录</a-menu-item>
+            <template #title>工具箱</template>
+            <a-menu-item key="tools">实用工具</a-menu-item>
             <a-menu-item key="monkey">Monkey测试</a-menu-item>
           </a-sub-menu>
         </a-menu>

@@ -897,7 +897,6 @@ class UIRecorder:
 
         print(f"[RECORD_STEP] 记录步骤 #{self._step_counter}: action={step.get('action')}, id={step.get('id')}")
 
-        # 不保存截图到数据库，只在实时显示时使用
         self.steps.append(step)
 
         if self._step_callback:

@@ -1,8 +1,14 @@
 """Monkey 测试 API"""
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from core.deps import check_permission
-from schemas.monkey import MonkeyConfig, MonkeyTaskResponse, DeviceInfoSchema
+from sqlalchemy.orm import Session
+from core.deps import check_permission, get_current_user
+from database import get_db
+from models.monkey import MonkeyPreset
+from schemas.monkey import (
+    MonkeyConfig, MonkeyTaskResponse, DeviceInfoSchema,
+    MonkeyPresetCreate, MonkeyPresetUpdate, MonkeyPresetOut,
+)
 from services.adb_service import adb_service
 
 logger = logging.getLogger(__name__)
@@ -85,3 +91,142 @@ def get_task_status(
         "status": task.status,
         "lines_count": len(task.output_lines),
     }
+
+
+# ==================== 预设配置 CRUD ====================
+
+# 默认预设模板（单一App Monkey测试热门配置）
+DEFAULT_PRESETS = [
+    {
+        "id": -1,
+        "name": "标准测试 - 均衡分布",
+        "pct_touch": 25,
+        "pct_motion": 15,
+        "pct_trackball": 0,
+        "pct_nav": 25,
+        "pct_majornav": 10,
+        "pct_syskeys": 5,
+        "pct_appswitch": 0,
+        "pct_anyevent": 20,
+        "event_count": 5000,
+        "interval": 300,
+    },
+    {
+        "id": -2,
+        "name": "UI密集型 - 触摸为主",
+        "pct_touch": 40,
+        "pct_motion": 25,
+        "pct_trackball": 0,
+        "pct_nav": 15,
+        "pct_majornav": 5,
+        "pct_syskeys": 5,
+        "pct_appswitch": 0,
+        "pct_anyevent": 10,
+        "event_count": 10000,
+        "interval": 200,
+    },
+    {
+        "id": -3,
+        "name": "导航密集型 - 页面跳转",
+        "pct_touch": 15,
+        "pct_motion": 10,
+        "pct_trackball": 0,
+        "pct_nav": 30,
+        "pct_majornav": 25,
+        "pct_syskeys": 10,
+        "pct_appswitch": 0,
+        "pct_anyevent": 10,
+        "event_count": 8000,
+        "interval": 350,
+    },
+    {
+        "id": -4,
+        "name": "快速冒烟 - 短时验证",
+        "pct_touch": 30,
+        "pct_motion": 15,
+        "pct_trackball": 0,
+        "pct_nav": 25,
+        "pct_majornav": 10,
+        "pct_syskeys": 5,
+        "pct_appswitch": 0,
+        "pct_anyevent": 15,
+        "event_count": 1000,
+        "interval": 200,
+    },
+]
+
+
+@router.get("/presets/default")
+def list_default_presets():
+    """获取默认预设模板"""
+    return DEFAULT_PRESETS
+
+
+@router.get("/presets", response_model=list[MonkeyPresetOut])
+def list_presets(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """获取当前用户的所有预设"""
+    return db.query(MonkeyPreset).filter(
+        MonkeyPreset.user_id == current_user.id
+    ).order_by(MonkeyPreset.updated_at.desc()).all()
+
+
+@router.post("/presets", response_model=MonkeyPresetOut)
+def create_preset(
+    data: MonkeyPresetCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """创建预设"""
+    preset = MonkeyPreset(
+        **data.model_dump(),
+        user_id=current_user.id,
+    )
+    db.add(preset)
+    db.commit()
+    db.refresh(preset)
+    return preset
+
+
+@router.put("/presets/{preset_id}", response_model=MonkeyPresetOut)
+def update_preset(
+    preset_id: int,
+    data: MonkeyPresetUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """更新预设"""
+    preset = db.query(MonkeyPreset).filter(
+        MonkeyPreset.id == preset_id,
+        MonkeyPreset.user_id == current_user.id,
+    ).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="预设不存在")
+
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(preset, key, value)
+
+    db.commit()
+    db.refresh(preset)
+    return preset
+
+
+@router.delete("/presets/{preset_id}")
+def delete_preset(
+    preset_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """删除预设"""
+    preset = db.query(MonkeyPreset).filter(
+        MonkeyPreset.id == preset_id,
+        MonkeyPreset.user_id == current_user.id,
+    ).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="预设不存在")
+
+    db.delete(preset)
+    db.commit()
+    return {"message": "已删除"}

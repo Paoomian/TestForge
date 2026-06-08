@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { getProjects, createProject, deleteProject } from '@/api/project'
 import type { Project } from '@/api/project'
 import EnvironmentDrawer from './EnvironmentDrawer.vue'
@@ -121,14 +121,23 @@ const handleCreate = async () => {
   }
 }
 
-const handleDelete = async (record: Project) => {
-  try {
-    await deleteProject(record.id)
-    Message.success('项目删除成功')
-    loadProjects()
-  } catch (error) {
-    Message.error('项目删除失败')
-  }
+const handleDelete = (record: Project) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除项目「${record.name}」吗？删除后将无法恢复。`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      try {
+        await deleteProject(record.id)
+        Message.success('项目删除成功')
+        loadProjects()
+      } catch (error) {
+        Message.error('项目删除失败')
+      }
+    },
+  })
 }
 
 const openEnvironmentDrawer = (record: Project) => {

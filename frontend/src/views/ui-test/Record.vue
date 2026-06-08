@@ -97,29 +97,32 @@
           <template #icon><icon-left /></template>
           返回上一页
         </a-button>
-        <a-button
-          v-if="steps.length > 0 && !isRecording"
-          @click="handlePreview"
-        >
-          <template #icon><icon-play-arrow /></template>
-          预览
-        </a-button>
-        <a-button
-          v-if="steps.length > 0 && !isRecording"
-          type="primary"
-          @click="handleSaveCase"
-        >
-          <template #icon><icon-save /></template>
-          保存用例
-        </a-button>
+        <template v-if="steps.length > 0 && !isRecording">
+          <a-button
+            status="danger"
+            @click="handleDiscardRecording"
+          >
+            <template #icon><icon-delete /></template>
+            放弃录制
+          </a-button>
+          <a-button
+            type="primary"
+            @click="handleSaveCase"
+          >
+            <template #icon><icon-save /></template>
+            保存用例
+          </a-button>
+        </template>
       </div>
     </div>
 
     <!-- 主内容区 -->
     <div class="record-content">
-      <!-- 左侧：浏览器预览 -->
+      <!-- 左侧：浏览器预览 / 步骤预览 -->
       <div class="content-left">
+        <!-- 浏览器预览模式 -->
         <BrowserPreview
+          v-if="rightActiveTab !== 'preview'"
           :ws="ws"
           :is-recording="isRecording"
           :is-select-mode="isSelectMode"
@@ -133,11 +136,68 @@
           @element-selected="handleElementSelected"
           @input-target="handleInputTarget"
         />
+
+        <!-- 步骤预览模式（实时执行） -->
+        <div v-else class="preview-mode">
+          <div class="preview-container">
+            <!-- 预览截图 -->
+            <div class="preview-screenshot">
+              <canvas ref="previewCanvasRef" class="preview-canvas" />
+              <div v-if="!previewStarted" class="preview-placeholder">
+                <icon-play-arrow :style="{ fontSize: '64px', color: 'var(--color-text-4)' }" />
+                <p>点击"开始预览"实时执行用例</p>
+              </div>
+            </div>
+
+            <!-- 步骤信息和控制栏 -->
+            <div class="preview-bottom">
+              <div class="preview-info">
+                <div class="preview-step-action" v-if="previewCurrentStep">
+                  {{ getActionLabel(previewCurrentStep.action) }}
+                </div>
+                <div class="preview-step-desc" v-if="previewCurrentStep">
+                  {{ getStepDesc(previewCurrentStep) }}
+                </div>
+                <div v-else class="preview-step-hint">
+                  实时执行录制的用例，观察执行效果
+                </div>
+              </div>
+
+              <!-- 控制栏 -->
+              <div class="preview-controls">
+                <a-button-group>
+                  <a-button
+                    v-if="!previewRunning"
+                    type="primary"
+                    @click="startPreview()"
+                    :disabled="steps.length === 0"
+                  >
+                    <template #icon><icon-play-arrow /></template>
+                    {{ previewCompleted ? '重新预览' : '开始预览' }}
+                  </a-button>
+                  <a-button
+                    v-else
+                    status="danger"
+                    @click="stopPreview"
+                  >
+                    <template #icon><icon-record-stop /></template>
+                    停止
+                  </a-button>
+                </a-button-group>
+
+                <!-- 进度 -->
+                <div class="preview-progress" v-if="previewTotalSteps > 0">
+                  {{ previewCurrentStepIndex }} / {{ previewTotalSteps }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 右侧：步骤列表 + 详情 -->
       <div class="content-right">
-        <a-tabs default-active-key="steps" class="right-tabs">
+        <a-tabs v-model:active-key="rightActiveTab" class="right-tabs">
           <a-tab-pane key="steps" title="录制步骤">
             <div class="tab-pane-content">
               <StepList
@@ -156,6 +216,18 @@
               <StepDetail
                 :step="selectedStep"
                 @update-step="handleUpdateStep"
+              />
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="preview" title="步骤预览" :disabled="steps.length === 0">
+            <div class="tab-pane-content">
+              <StepList
+                :steps="steps"
+                :selected-index="previewCurrentStepIndex > 0 ? previewCurrentStepIndex - 1 : -1"
+                :step-results="previewStepResults"
+                :current-step-index="previewCurrentStepIndex"
+                :readonly="true"
+                @select-step="handlePreviewStepSelect"
               />
             </div>
           </a-tab-pane>
@@ -212,72 +284,6 @@
       @confirm="handleInputConfirm"
       @update:visible="handleInputModalVisibleChange"
     />
-
-    <!-- 预览弹窗 -->
-    <a-modal
-      v-model:visible="previewVisible"
-      title="录制预览"
-      :width="900"
-      :footer="false"
-      @close="stopPreview"
-    >
-      <div class="preview-container">
-        <!-- 预览内容 -->
-        <div class="preview-content">
-          <!-- 截图显示 -->
-          <div class="preview-screenshot">
-            <img
-              v-if="previewStep?.screenshot"
-              :src="`data:image/jpeg;base64,${previewStep.screenshot}`"
-              alt="步骤截图"
-            />
-            <div v-else class="preview-placeholder">
-              暂无截图
-            </div>
-          </div>
-
-          <!-- 步骤信息 -->
-          <div class="preview-info">
-            <div class="preview-step-action">
-              {{ previewStep ? getActionLabel(previewStep.action) : '' }}
-            </div>
-            <div class="preview-step-desc">
-              {{ previewStep ? getStepDesc(previewStep) : '' }}
-            </div>
-          </div>
-        </div>
-
-        <!-- 控制栏 -->
-        <div class="preview-controls">
-          <a-button-group>
-            <a-button
-              v-if="!previewPlaying"
-              type="primary"
-              @click="previewStepIndex === 0 ? startPreview() : resumePreview()"
-            >
-              <template #icon><icon-play-arrow /></template>
-              {{ previewStepIndex === 0 ? '开始' : '继续' }}
-            </a-button>
-            <a-button
-              v-else
-              @click="pausePreview"
-            >
-              <template #icon><icon-pause /></template>
-              暂停
-            </a-button>
-            <a-button @click="stopPreview">
-              <template #icon><icon-record-stop /></template>
-              停止
-            </a-button>
-          </a-button-group>
-
-          <!-- 进度 -->
-          <div class="preview-progress">
-            {{ previewStepIndex }} / {{ steps.length }}
-          </div>
-        </div>
-      </div>
-    </a-modal>
   </div>
 </template>
 
@@ -293,6 +299,7 @@ import {
   IconCheckCircle,
   IconPause,
   IconPlayArrow,
+  IconDelete,
 } from '@arco-design/web-vue/es/icon'
 import BrowserPreview from './components/BrowserPreview.vue'
 import StepList from './components/StepList.vue'
@@ -345,11 +352,26 @@ const saveForm = ref({
 })
 const projectsLoading = ref(false)
 
-// 预览相关
-const previewVisible = ref(false)
-const previewStepIndex = ref(0)
-const previewPlaying = ref(false)
-let previewTimer: number | null = null
+// 右侧 Tab 当前激活的 key
+const rightActiveTab = ref('steps')
+
+// 预览相关（实时执行模式）
+const previewCanvasRef = ref<HTMLCanvasElement>()
+const previewWs = ref<WebSocket | null>(null)
+const previewStarted = ref(false)
+const previewRunning = ref(false)
+const previewCompleted = ref(false)
+const previewCurrentStepIndex = ref(0)
+const previewTotalSteps = ref(0)
+const previewStepResults = ref<Array<{ success: boolean; message: string; done: boolean }>>([])
+
+// 当前预览的步骤
+const previewCurrentStep = computed(() => {
+  if (previewCurrentStepIndex.value > 0 && previewCurrentStepIndex.value <= steps.value.length) {
+    return steps.value[previewCurrentStepIndex.value - 1]
+  }
+  return null
+})
 
 // ========== 计算属性 ==========
 
@@ -361,12 +383,6 @@ const isPaused = computed(() => recordingStatus.value === 'paused')
 
 const selectedStep = computed(() =>
   selectedStepIndex.value >= 0 ? steps.value[selectedStepIndex.value] : null
-)
-
-const previewStep = computed(() =>
-  previewStepIndex.value > 0 && previewStepIndex.value <= steps.value.length
-    ? steps.value[previewStepIndex.value - 1]
-    : null
 )
 
 const hasPageHistory = computed(() => pageHistoryCount.value > 0)
@@ -406,7 +422,14 @@ async function handleStartRecording() {
   }
 
   recordingStatus.value = 'connecting'
+  // 开始新录制时清空之前的步骤
   steps.value = []
+  selectedStepIndex.value = -1
+  // 重置预览状态
+  previewStarted.value = false
+  previewRunning.value = false
+  previewCompleted.value = false
+  previewCurrentStepIndex.value = 0
 
   try {
     // 调用后端启动录制
@@ -486,14 +509,8 @@ async function handleStopRecording() {
     ws.value = null
   }
 
-  // 如果有步骤，弹出保存弹窗
-  if (steps.value.length > 0) {
-    saveForm.value.name = `录制用例 ${new Date().toLocaleString()}`
-    await loadProjects()
-    saveModalVisible.value = true
-  }
-
-  Message.info(`录制已停止，共 ${steps.value.length} 步`)
+  // 停止后进入编辑/预览模式，不自动弹出保存弹窗
+  Message.info(`录制已停止，共 ${steps.value.length} 步，可预览或编辑后保存`)
 }
 
 function handleStepRecorded(step: UIStep) {
@@ -615,52 +632,162 @@ function getStepDesc(step: UIStep): string {
   return ''
 }
 
-function handlePreview() {
-  previewVisible.value = true
-  previewStepIndex.value = 0
-  previewPlaying.value = false
+function updatePreviewScreenshot(base64Data: string) {
+  const canvas = previewCanvasRef.value
+  if (!canvas) return
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const img = new Image()
+  img.onload = () => {
+    // 调整 canvas 大小以适应容器
+    const container = canvas.parentElement
+    if (container) {
+      const ratio = Math.min(
+        container.clientWidth / img.width,
+        container.clientHeight / img.height
+      )
+      canvas.width = img.width * ratio
+      canvas.height = img.height * ratio
+    }
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  }
+  img.src = `data:image/jpeg;base64,${base64Data}`
+}
+
+function handlePreviewStepSelect(index: number) {
+  // 实时执行模式下，点击步骤列表不做任何操作
+  // 只是高亮显示当前步骤
 }
 
 function startPreview() {
-  previewPlaying.value = true
-  previewStepIndex.value = 0
-  playNextStep()
-}
-
-function pausePreview() {
-  previewPlaying.value = false
-  if (previewTimer) {
-    clearTimeout(previewTimer)
-    previewTimer = null
-  }
-}
-
-function resumePreview() {
-  previewPlaying.value = true
-  playNextStep()
-}
-
-function stopPreview() {
-  previewPlaying.value = false
-  previewStepIndex.value = 0
-  if (previewTimer) {
-    clearTimeout(previewTimer)
-    previewTimer = null
-  }
-}
-
-function playNextStep() {
-  if (!previewPlaying.value || previewStepIndex.value >= steps.value.length) {
-    previewPlaying.value = false
+  if (steps.value.length === 0) {
+    Message.warning('没有录制步骤')
     return
   }
 
-  previewStepIndex.value++
+  // 重置状态
+  previewStarted.value = true
+  previewRunning.value = true
+  previewCompleted.value = false
+  previewCurrentStepIndex.value = 0
+  previewTotalSteps.value = steps.value.length
+  previewStepResults.value = steps.value.map(() => ({
+    success: false,
+    message: '',
+    done: false,
+  }))
 
-  // 等待一段时间后播放下一步
-  previewTimer = window.setTimeout(() => {
-    playNextStep()
-  }, 1500) // 每步 1.5 秒
+  // 建立 WebSocket 连接
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws/ui-preview`
+  previewWs.value = new WebSocket(wsUrl)
+
+  previewWs.value.onopen = () => {
+    console.log('[Preview] WebSocket 已连接，发送步骤数据...')
+    // 发送步骤数据
+    previewWs.value?.send(JSON.stringify({
+      type: 'start_preview',
+      steps: steps.value,
+      base_url: targetUrl.value,
+    }))
+  }
+
+  previewWs.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      handlePreviewMessage(data)
+    } catch (e) {
+      console.error('[Preview] 解析消息失败:', e)
+    }
+  }
+
+  previewWs.value.onclose = () => {
+    console.log('[Preview] WebSocket 已断开')
+    if (previewRunning.value) {
+      previewRunning.value = false
+      previewCompleted.value = true
+    }
+  }
+
+  previewWs.value.onerror = () => {
+    Message.error('预览连接失败')
+    previewRunning.value = false
+  }
+}
+
+function handlePreviewMessage(data: Record<string, unknown>) {
+  switch (data.type) {
+    case 'screenshot':
+      updatePreviewScreenshot(data.data as string)
+      break
+
+    case 'progress':
+      handlePreviewProgress(data)
+      break
+
+    case 'started':
+      previewTotalSteps.value = data.total_steps as number
+      console.log('[Preview] 开始执行，共', previewTotalSteps.value, '步')
+      break
+
+    case 'completed':
+      previewRunning.value = false
+      previewCompleted.value = true
+      const allSuccess = previewStepResults.value.every(r => r.success)
+      Message.success(allSuccess ? '预览完成，所有步骤执行成功' : '预览完成，有步骤执行失败')
+      break
+
+    case 'error':
+      Message.error(data.message as string)
+      previewRunning.value = false
+      break
+
+    case 'ping':
+      // 心跳，忽略
+      break
+  }
+}
+
+function handlePreviewProgress(data: Record<string, unknown>) {
+  const progressType = data.progress_type as string
+  const current = data.current as number
+  const total = data.total as number
+
+  previewCurrentStepIndex.value = current
+  previewTotalSteps.value = total
+
+  if (progressType === 'step_end') {
+    const result = data.result as Record<string, unknown>
+    const index = current - 1
+    if (index >= 0 && index < previewStepResults.value.length) {
+      previewStepResults.value[index] = {
+        success: result.success as boolean,
+        message: result.message as string,
+        done: true,
+      }
+    }
+  }
+}
+
+function stopPreview() {
+  // 发送停止命令
+  if (previewWs.value && previewWs.value.readyState === WebSocket.OPEN) {
+    previewWs.value.send(JSON.stringify({
+      type: 'command',
+      action: 'stop',
+    }))
+  }
+
+  // 关闭 WebSocket
+  if (previewWs.value) {
+    previewWs.value.close()
+    previewWs.value = null
+  }
+
+  previewRunning.value = false
+  previewCompleted.value = true
 }
 
 function handleGoBack() {
@@ -818,6 +945,15 @@ async function handleSaveCase() {
   saveModalVisible.value = true
 }
 
+function handleDiscardRecording() {
+  // 放弃录制，清空所有状态
+  steps.value = []
+  selectedStepIndex.value = -1
+  sessionId.value = ''
+  recordingStatus.value = 'idle'
+  Message.info('已放弃录制')
+}
+
 async function handleConfirmSave() {
   if (!saveForm.value.name) {
     Message.warning('请输入用例名称')
@@ -840,10 +976,9 @@ async function handleConfirmSave() {
     Message.success('用例保存成功')
     saveModalVisible.value = false
 
-    // 清理状态
-    steps.value = []
+    // 保存成功后保留步骤，用户可以继续编辑或开始新录制
+    // 清除 sessionId，因为已经保存过了
     sessionId.value = ''
-    recordingStatus.value = 'idle'
   } catch (err: unknown) {
     Message.error(`保存失败: ${(err as Error).message || '未知错误'}`)
   }
@@ -859,6 +994,10 @@ onUnmounted(() => {
   // 清理 WebSocket
   if (ws.value) {
     ws.value.close()
+  }
+  // 清理预览 WebSocket
+  if (previewWs.value) {
+    previewWs.value.close()
   }
 })
 </script>
@@ -931,6 +1070,8 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .content-right {
@@ -980,15 +1121,22 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* 预览弹窗样式 */
-.preview-container {
+/* 预览模式样式 */
+.preview-mode {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e6eb;
+  overflow: hidden;
 }
 
-.preview-content {
+.preview-container {
+  flex: 1;
   display: flex;
+  flex-direction: column;
+  padding: 16px;
   gap: 16px;
 }
 
@@ -1001,49 +1149,70 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
-.preview-screenshot img {
+.preview-canvas {
   max-width: 100%;
-  max-height: 400px;
-  object-fit: contain;
+  max-height: 100%;
 }
 
 .preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   color: #86909c;
   font-size: 14px;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-bottom {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f7f8fa;
+  border-radius: 8px;
 }
 
 .preview-info {
-  width: 250px;
-  flex-shrink: 0;
-  background: #f7f8fa;
-  border-radius: 8px;
-  padding: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .preview-step-action {
   font-size: 16px;
   font-weight: 600;
   color: #165DFF;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .preview-step-desc {
   font-size: 14px;
   color: #4e5969;
   word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preview-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid #e5e6eb;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .preview-progress {
+  font-size: 14px;
+  color: #86909c;
+  white-space: nowrap;
+}
+
+.preview-step-hint {
   font-size: 14px;
   color: #86909c;
 }

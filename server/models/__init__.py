@@ -17,6 +17,7 @@ from .test_case_data_rule import TestCaseDataRule
 from .scene_node import SceneNode, SceneNodeType, ConditionOperator, AssignSource
 from .ai_generate import AIProviderConfig, AIGenerateTask
 from .ai_skill import AISkill
+from .monkey import MonkeyPreset
 
 __all__ = [
     "User",
@@ -44,4 +45,5 @@ __all__ = [
     "SceneNodeType",
     "ConditionOperator",
     "AssignSource",
+    "MonkeyPreset",
 ]

@@ -4,7 +4,7 @@
     <div class="step-list-header">
       <span class="step-count">共 {{ steps.length }} 步</span>
       <a-button
-        v-if="steps.length > 0"
+        v-if="steps.length > 0 && !readonly"
         type="text"
         size="mini"
         status="danger"
@@ -22,10 +22,14 @@
         class="step-item"
         :class="{
           'step-item--active': selectedIndex === index,
+          'step-item--current': currentStepIndex === index + 1,
+          'step-item--success': stepResults[index]?.done && stepResults[index]?.success,
+          'step-item--failed': stepResults[index]?.done && !stepResults[index]?.success,
+          'step-item--pending': stepResults.length > 0 && !stepResults[index]?.done,
           'step-item--dragging': dragIndex === index,
           'step-item--drag-over': dragOverIndex === index && dragIndex !== index,
         }"
-        draggable="true"
+        :draggable="!readonly"
         @click="$emit('selectStep', index)"
         @dragstart="handleDragStart(index, $event)"
         @dragover.prevent="handleDragOver(index, $event)"
@@ -33,27 +37,24 @@
         @drop="handleDrop(index, $event)"
         @dragend="handleDragEnd"
       >
-        <!-- 步骤序号 -->
-        <div class="step-index">{{ index + 1 }}</div>
-
-        <!-- 步骤图标 -->
-        <div class="step-icon">
-          <component :is="getStepIcon(step.action)" />
+        <!-- 步骤序号/状态 -->
+        <div class="step-index">
+          <icon-check-circle v-if="stepResults[index]?.done && stepResults[index]?.success" style="color: #00b42a;" />
+          <icon-close-circle v-else-if="stepResults[index]?.done && !stepResults[index]?.success" style="color: #f53f3f;" />
+          <span v-else>{{ index + 1 }}</span>
         </div>
 
         <!-- 步骤信息 -->
         <div class="step-info">
-          <span class="step-action">{{ getActionLabel(step.action) }}</span>
-          <span class="step-target">{{ getStepDescription(step) }}</span>
+          <div class="step-action">{{ getActionLabel(step.action) }}</div>
+          <div class="step-desc">{{ getStepDescription(step) }}</div>
+          <div v-if="stepResults[index]?.done && stepResults[index]?.message" class="step-message" :class="{ 'message-error': !stepResults[index]?.success }">
+            {{ stepResults[index]?.message }}
+          </div>
         </div>
 
-        <!-- 截图缩略图 -->
-        <div v-if="step.screenshot" class="step-thumbnail">
-          <img :src="`data:image/jpeg;base64,${step.screenshot}`" alt="截图" />
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="step-actions">
+        <!-- 操作按钮（非只读模式显示） -->
+        <div v-if="!readonly" class="step-actions">
           <a-dropdown @select="(value) => handleInsertStep(index, value as string)" position="br">
             <a-button
               type="text"
@@ -107,16 +108,30 @@ import {
   IconClockCircle,
   IconObliqueLine,
   IconCheckCircle,
+  IconCloseCircle,
   IconPlus,
 } from '@arco-design/web-vue/es/icon'
 import type { UIStep } from '@/api/uiCase'
 
+interface StepResult {
+  success: boolean
+  message: string
+  done: boolean
+}
+
 interface Props {
   steps: UIStep[]
   selectedIndex: number
+  stepResults?: StepResult[]
+  currentStepIndex?: number
+  readonly?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  stepResults: () => [],
+  currentStepIndex: 0,
+  readonly: false,
+})
 
 const emit = defineEmits<{
   selectStep: [index: number]
@@ -340,7 +355,7 @@ function getStepDescription(step: UIStep): string {
 
 .step-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
   border-radius: 6px;
@@ -356,6 +371,23 @@ function getStepDescription(step: UIStep): string {
 .step-item--active {
   background: #e8f3ff;
   border-color: #165DFF;
+}
+
+.step-item--current {
+  background: #e8f3ff;
+  border-color: #165DFF;
+}
+
+.step-item--success {
+  background: #e8ffea;
+}
+
+.step-item--failed {
+  background: #ffe8e8;
+}
+
+.step-item--pending {
+  opacity: 0.6;
 }
 
 /* 拖拽样式 */
@@ -383,12 +415,10 @@ function getStepDescription(step: UIStep): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f2f3f5;
-  border-radius: 50%;
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 500;
   color: #4e5969;
-  flex-shrink: 0;
 }
 
 .step-item--active .step-index {
@@ -396,32 +426,33 @@ function getStepDescription(step: UIStep): string {
   color: #fff;
 }
 
-.step-icon {
-  font-size: 16px;
-  color: #86909c;
-  flex-shrink: 0;
-}
-
 .step-info {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .step-action {
-  font-size: 12px;
-  color: #165DFF;
+  font-size: 13px;
   font-weight: 500;
+  color: #1d2129;
 }
 
-.step-target {
-  font-size: 13px;
-  color: #4e5969;
+.step-desc {
+  font-size: 12px;
+  color: #86909c;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.step-message {
+  font-size: 12px;
+  color: #4e5969;
+  margin-top: 4px;
+}
+
+.step-message.message-error {
+  color: #f53f3f;
 }
 
 .step-thumbnail {

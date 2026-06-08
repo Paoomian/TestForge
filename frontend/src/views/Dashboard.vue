@@ -3,130 +3,135 @@
     <!-- 统计卡片 -->
     <a-row :gutter="20">
       <a-col :span="6">
-        <div class="stat-card stat-card-purple">
+        <div class="stat-card stat-card-purple" @click="$router.push({ name: 'project-list' })">
           <div class="stat-icon-wrapper">
             <icon-folder class="stat-icon" />
           </div>
           <div class="stat-content">
             <div class="stat-label">项目总数</div>
-            <div class="stat-value">{{ stats.projects }}</div>
+            <div class="stat-value">{{ stats.project_count }}</div>
           </div>
         </div>
       </a-col>
       <a-col :span="6">
-        <div class="stat-card stat-card-indigo">
+        <div class="stat-card stat-card-indigo" @click="$router.push({ name: 'ui-case-list' })">
           <div class="stat-icon-wrapper">
             <icon-desktop class="stat-icon" />
           </div>
           <div class="stat-content">
-            <div class="stat-label">UI用例</div>
-            <div class="stat-value">{{ stats.uiCases }}</div>
+            <div class="stat-label">UI 用例</div>
+            <div class="stat-value">{{ stats.ui_case_count }}</div>
           </div>
         </div>
       </a-col>
       <a-col :span="6">
-        <div class="stat-card stat-card-blue">
+        <div class="stat-card stat-card-blue" @click="$router.push({ name: 'api-test-manage' })">
           <div class="stat-icon-wrapper">
             <icon-code class="stat-icon" />
           </div>
           <div class="stat-content">
             <div class="stat-label">接口用例</div>
-            <div class="stat-value">{{ stats.apiCases }}</div>
+            <div class="stat-value">{{ stats.api_case_count }}</div>
           </div>
         </div>
       </a-col>
       <a-col :span="6">
-        <div class="stat-card stat-card-cyan">
+        <div class="stat-card stat-card-cyan" @click="$router.push({ name: 'report-list' })">
           <div class="stat-icon-wrapper">
             <icon-play-arrow class="stat-icon" />
           </div>
           <div class="stat-content">
-            <div class="stat-label">执行次数</div>
-            <div class="stat-value">{{ stats.executions }}</div>
+            <div class="stat-label">今日执行</div>
+            <div class="stat-value">{{ stats.today_run_count }}</div>
           </div>
         </div>
       </a-col>
     </a-row>
 
-    <!-- 欢迎卡片 -->
-    <a-row :gutter="20" style="margin-top: 24px">
+    <!-- 图表区域 -->
+    <a-row :gutter="20" style="margin-top: 20px">
+      <!-- 执行趋势 -->
       <a-col :span="16">
-        <a-card class="welcome-card" :bordered="false">
-          <div class="welcome-content">
-            <div class="welcome-text">
-              <h2 class="welcome-title">欢迎使用 TestForge</h2>
-              <p class="welcome-desc">集UI自动化、接口自动化和接口调试于一体的现代化测试平台，助力团队高效交付</p>
+        <a-card class="chart-card" :bordered="false">
+          <template #title>
+            <div class="card-title-wrapper">
+              <span class="card-title">执行趋势</span>
               <a-space>
-                <a-button type="primary" size="large" @click="$router.push({ name: 'project-list' })">
-                  <template #icon><icon-plus /></template>
-                  创建项目
-                </a-button>
-                <a-button size="large" @click="$router.push({ name: 'api-debug' })">
-                  <template #icon><icon-bug /></template>
-                  接口调试
-                </a-button>
+                <a-button :type="trendDays === 7 ? 'primary' : 'outline'" size="mini" @click="trendDays = 7; loadTrendData()">近7天</a-button>
+                <a-button :type="trendDays === 14 ? 'primary' : 'outline'" size="mini" @click="trendDays = 14; loadTrendData()">近14天</a-button>
+                <a-button :type="trendDays === 30 ? 'primary' : 'outline'" size="mini" @click="trendDays = 30; loadTrendData()">近30天</a-button>
               </a-space>
             </div>
-            <div class="welcome-illustration">
-              <svg viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="20" y="20" width="160" height="120" rx="16" fill="url(#dash-card-grad)" opacity="0.15"/>
-                <rect x="40" y="50" width="50" height="6" rx="3" fill="#A78BFA" opacity="0.6"/>
-                <rect x="40" y="64" width="80" height="4" rx="2" fill="#C4B5FD" opacity="0.4"/>
-                <rect x="40" y="74" width="60" height="4" rx="2" fill="#C4B5FD" opacity="0.3"/>
-                <circle cx="150" cy="50" r="20" fill="url(#dash-circle-grad)" opacity="0.2"/>
-                <path d="M142 50L148 56L158 44" stroke="#818CF8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <rect x="40" y="90" width="120" height="30" rx="8" fill="url(#dash-btn-grad)" opacity="0.3"/>
-                <rect x="55" y="100" width="40" height="8" rx="4" fill="white" opacity="0.8"/>
-                <defs>
-                  <linearGradient id="dash-card-grad" x1="20" y1="20" x2="180" y2="140">
-                    <stop stop-color="#A78BFA"/>
-                    <stop offset="1" stop-color="#818CF8"/>
-                  </linearGradient>
-                  <linearGradient id="dash-circle-grad" x1="130" y1="30" x2="170" y2="70">
-                    <stop stop-color="#A78BFA"/>
-                    <stop offset="1" stop-color="#818CF8"/>
-                  </linearGradient>
-                  <linearGradient id="dash-btn-grad" x1="40" y1="90" x2="160" y2="120">
-                    <stop stop-color="#A78BFA"/>
-                    <stop offset="1" stop-color="#818CF8"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+          </template>
+          <div ref="trendChartRef" class="chart-container"></div>
+        </a-card>
+      </a-col>
+
+      <!-- 测试通过率 -->
+      <a-col :span="8">
+        <a-card class="chart-card" :bordered="false">
+          <template #title>
+            <span class="card-title">测试通过率</span>
+          </template>
+          <div ref="passRateChartRef" class="chart-container"></div>
+          <div class="pass-rate-info">
+            <div class="pass-rate-value">{{ passRate.pass_rate }}%</div>
+            <div class="pass-rate-label">通过率</div>
           </div>
         </a-card>
       </a-col>
-      <a-col :span="8">
-        <a-card class="quick-actions-card" :bordered="false">
+    </a-row>
+
+    <a-row :gutter="20" style="margin-top: 20px">
+      <!-- 最近执行记录 -->
+      <a-col :span="16">
+        <a-card class="table-card" :bordered="false">
           <template #title>
-            <span class="card-title">快速操作</span>
+            <div class="card-title-wrapper">
+              <span class="card-title">最近执行记录</span>
+              <a-button type="text" size="small" @click="$router.push({ name: 'report-list' })">
+                查看全部 <icon-right />
+              </a-button>
+            </div>
           </template>
-          <div class="quick-actions">
-            <div class="action-item" @click="$router.push({ name: 'project-list' })">
-              <div class="action-icon action-icon-purple">
-                <icon-folder />
-              </div>
-              <span class="action-label">项目管理</span>
-            </div>
-            <div class="action-item" @click="$router.push({ name: 'api-test-manage' })">
-              <div class="action-icon action-icon-indigo">
-                <icon-code />
-              </div>
-              <span class="action-label">接口用例</span>
-            </div>
-            <div class="action-item" @click="$router.push({ name: 'api-debug' })">
-              <div class="action-icon action-icon-blue">
-                <icon-bug />
-              </div>
-              <span class="action-label">接口调试</span>
-            </div>
-            <div class="action-item" @click="$router.push({ name: 'report-list' })">
-              <div class="action-icon action-icon-cyan">
-                <icon-file />
-              </div>
-              <span class="action-label">测试报告</span>
-            </div>
-          </div>
+          <a-table :data="recentRuns" :pagination="false" :bordered="false" size="small">
+            <template #columns>
+              <a-table-column title="名称" data-index="name" :width="180" />
+              <a-table-column title="状态" :width="80">
+                <template #cell="{ record }">
+                  <a-tag :color="getStatusColor(record.status)" size="small">
+                    {{ getStatusLabel(record.status) }}
+                  </a-tag>
+                </template>
+              </a-table-column>
+              <a-table-column title="通过" :width="60">
+                <template #cell="{ record }">
+                  <span class="text-success">{{ record.pass_count }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="失败" :width="60">
+                <template #cell="{ record }">
+                  <span class="text-danger">{{ record.fail_count }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="耗时" :width="80">
+                <template #cell="{ record }">
+                  {{ record.duration ? `${(record.duration / 1000).toFixed(1)}s` : '-' }}
+                </template>
+              </a-table-column>
+              <a-table-column title="时间" data-index="created_at" />
+            </template>
+          </a-table>
+        </a-card>
+      </a-col>
+
+      <!-- 用例分布 -->
+      <a-col :span="8">
+        <a-card class="chart-card" :bordered="false">
+          <template #title>
+            <span class="card-title">用例分布</span>
+          </template>
+          <div ref="distributionChartRef" class="chart-container"></div>
         </a-card>
       </a-col>
     </a-row>
@@ -134,13 +139,370 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { IconRight } from '@arco-design/web-vue/es/icon'
+import * as echarts from 'echarts'
+import {
+  getDashboardStats,
+  getRecentRuns,
+  getRunTrend,
+  getPassRate,
+  getCaseDistribution,
+} from '@/api/dashboard'
+import type { DashboardStats, RecentRun, TrendItem, PassRate, CaseDistribution } from '@/api/dashboard'
 
-const stats = reactive({
-  projects: 0,
-  uiCases: 0,
-  apiCases: 0,
-  executions: 0
+// 统计数据
+const stats = reactive<DashboardStats>({
+  project_count: 0,
+  ui_case_count: 0,
+  api_case_count: 0,
+  today_run_count: 0,
+  total_run_count: 0,
+  last_run: null,
+})
+
+// 最近执行记录
+const recentRuns = ref<RecentRun[]>([])
+
+// 执行趋势
+const trendDays = ref(7)
+const trendData = ref<TrendItem[]>([])
+
+// 通过率
+const passRate = reactive<PassRate>({
+  total: 0,
+  pass: 0,
+  fail: 0,
+  error: 0,
+  pass_rate: 0,
+})
+
+// 用例分布
+const distributionData = ref<CaseDistribution[]>([])
+
+// 图表引用
+const trendChartRef = ref<HTMLElement>()
+const passRateChartRef = ref<HTMLElement>()
+const distributionChartRef = ref<HTMLElement>()
+
+// 图表实例
+let trendChart: echarts.ECharts | null = null
+let passRateChart: echarts.ECharts | null = null
+let distributionChart: echarts.ECharts | null = null
+
+// 加载统计数据
+async function loadStats() {
+  try {
+    const data = await getDashboardStats()
+    Object.assign(stats, data)
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+  }
+}
+
+// 加载最近执行记录
+async function loadRecentRuns() {
+  try {
+    recentRuns.value = await getRecentRuns(8)
+  } catch (error) {
+    console.error('加载最近执行记录失败:', error)
+  }
+}
+
+// 加载执行趋势
+async function loadTrendData() {
+  try {
+    trendData.value = await getRunTrend(trendDays.value)
+    renderTrendChart()
+  } catch (error) {
+    console.error('加载执行趋势失败:', error)
+  }
+}
+
+// 加载通过率
+async function loadPassRate() {
+  try {
+    const data = await getPassRate()
+    Object.assign(passRate, data)
+    renderPassRateChart()
+  } catch (error) {
+    console.error('加载通过率失败:', error)
+  }
+}
+
+// 加载用例分布
+async function loadDistribution() {
+  try {
+    distributionData.value = await getCaseDistribution()
+    renderDistributionChart()
+  } catch (error) {
+    console.error('加载用例分布失败:', error)
+  }
+}
+
+// 渲染执行趋势图表
+function renderTrendChart() {
+  if (!trendChartRef.value) return
+
+  if (!trendChart) {
+    trendChart = echarts.init(trendChartRef.value)
+  }
+
+  const dates = trendData.value.map(item => item.date)
+  const passData = trendData.value.map(item => item.pass)
+  const failData = trendData.value.map(item => item.fail)
+  const errorData = trendData.value.map(item => item.error)
+
+  trendChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow',
+      },
+    },
+    legend: {
+      data: ['通过', '失败', '错误'],
+      right: 0,
+      top: 0,
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      top: '40px',
+      containLabel: true,
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: {
+        lineStyle: { color: '#e5e6eb' },
+      },
+      axisLabel: {
+        color: '#86909c',
+      },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false,
+      },
+      axisTick: {
+        show: false,
+      },
+      axisLabel: {
+        color: '#86909c',
+      },
+      splitLine: {
+        lineStyle: { color: '#f2f3f5' },
+      },
+    },
+    series: [
+      {
+        name: '通过',
+        type: 'bar',
+        stack: 'total',
+        data: passData,
+        itemStyle: {
+          color: '#00b42a',
+          borderRadius: [0, 0, 0, 0],
+        },
+      },
+      {
+        name: '失败',
+        type: 'bar',
+        stack: 'total',
+        data: failData,
+        itemStyle: {
+          color: '#f53f3f',
+        },
+      },
+      {
+        name: '错误',
+        type: 'bar',
+        stack: 'total',
+        data: errorData,
+        itemStyle: {
+          color: '#ff7d00',
+          borderRadius: [4, 4, 0, 0],
+        },
+      },
+    ],
+  })
+}
+
+// 渲染通过率图表
+function renderPassRateChart() {
+  if (!passRateChartRef.value) return
+
+  if (!passRateChart) {
+    passRateChart = echarts.init(passRateChartRef.value)
+  }
+
+  passRateChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+    },
+    legend: {
+      orient: 'vertical',
+      right: '10%',
+      top: 'center',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        fontSize: 12,
+      },
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['50%', '70%'],
+        center: ['40%', '50%'],
+        avoidLabelOverlap: false,
+        label: {
+          show: false,
+        },
+        emphasis: {
+          label: {
+            show: false,
+          },
+        },
+        labelLine: {
+          show: false,
+        },
+        data: [
+          {
+            value: passRate.pass,
+            name: '通过',
+            itemStyle: { color: '#00b42a' },
+          },
+          {
+            value: passRate.fail,
+            name: '失败',
+            itemStyle: { color: '#f53f3f' },
+          },
+          {
+            value: passRate.error,
+            name: '错误',
+            itemStyle: { color: '#ff7d00' },
+          },
+        ],
+      },
+    ],
+  })
+}
+
+// 渲染用例分布图表
+function renderDistributionChart() {
+  if (!distributionChartRef.value) return
+
+  if (!distributionChart) {
+    distributionChart = echarts.init(distributionChartRef.value)
+  }
+
+  distributionChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+    },
+    legend: {
+      orient: 'vertical',
+      right: '10%',
+      top: 'center',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        fontSize: 12,
+      },
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '65%'],
+        center: ['40%', '50%'],
+        avoidLabelOverlap: false,
+        label: {
+          show: false,
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold',
+          },
+        },
+        labelLine: {
+          show: false,
+        },
+        data: distributionData.value.map((item, index) => ({
+          ...item,
+          itemStyle: {
+            color: index === 0 ? '#6366f1' : '#3b82f6',
+          },
+        })),
+      },
+    ],
+  })
+}
+
+// 获取状态颜色
+function getStatusColor(status: string) {
+  const map: Record<string, string> = {
+    done: 'green',
+    completed: 'green',
+    running: 'blue',
+    failed: 'red',
+    error: 'orange',
+    pending: 'gray',
+    cancelled: 'gray',
+  }
+  return map[status] || 'gray'
+}
+
+// 获取状态标签
+function getStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    done: '完成',
+    completed: '完成',
+    running: '运行中',
+    failed: '失败',
+    error: '错误',
+    pending: '待执行',
+    cancelled: '已取消',
+  }
+  return map[status] || status
+}
+
+// 窗口大小变化时重新渲染图表
+function handleResize() {
+  trendChart?.resize()
+  passRateChart?.resize()
+  distributionChart?.resize()
+}
+
+onMounted(async () => {
+  // 并行加载数据
+  await Promise.all([
+    loadStats(),
+    loadRecentRuns(),
+    loadTrendData(),
+    loadPassRate(),
+    loadDistribution(),
+  ])
+
+  // 监听窗口大小变化
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  // 销毁图表实例
+  trendChart?.dispose()
+  passRateChart?.dispose()
+  distributionChart?.dispose()
+
+  // 移除事件监听
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
@@ -160,7 +522,7 @@ const stats = reactive({
   border: 1px solid rgba(224, 212, 252, 0.25);
   box-shadow: var(--shadow-card);
   transition: all var(--transition-slow);
-  cursor: default;
+  cursor: pointer;
 }
 
 .stat-card:hover {
@@ -220,53 +582,20 @@ const stats = reactive({
   line-height: 1.2;
 }
 
-/* ---- 欢迎卡片 ---- */
-.welcome-card {
+/* ---- 图表卡片 ---- */
+.chart-card {
   height: 100%;
 }
 
-.welcome-card :deep(.arco-card-body) {
-  padding: 32px;
+.chart-card :deep(.arco-card-body) {
+  padding: 16px 20px 20px;
 }
 
-.welcome-content {
+.card-title-wrapper {
   display: flex;
   align-items: center;
-  gap: 32px;
-}
-
-.welcome-text {
-  flex: 1;
-}
-
-.welcome-title {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--gray-800);
-  margin: 0 0 12px 0;
-  letter-spacing: -0.5px;
-}
-
-.welcome-desc {
-  font-size: var(--font-size-base);
-  color: var(--gray-500);
-  line-height: var(--line-height-relaxed);
-  margin: 0 0 24px 0;
-}
-
-.welcome-illustration {
-  width: 200px;
-  flex-shrink: 0;
-}
-
-.welcome-illustration svg {
+  justify-content: space-between;
   width: 100%;
-  height: auto;
-}
-
-/* ---- 快速操作卡片 ---- */
-.quick-actions-card {
-  height: 100%;
 }
 
 .card-title {
@@ -275,66 +604,47 @@ const stats = reactive({
   color: var(--gray-800);
 }
 
-.quick-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.chart-container {
+  width: 100%;
+  height: 280px;
 }
 
-.action-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 20px 16px;
-  background: var(--gray-50);
-  border-radius: var(--radius-lg);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all var(--transition-slow);
+/* ---- 通过率信息 ---- */
+.pass-rate-info {
+  text-align: center;
+  margin-top: -20px;
+  position: relative;
+  z-index: 1;
 }
 
-.action-item:hover {
-  background: white;
-  border-color: rgba(167, 139, 250, 0.2);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+.pass-rate-value {
+  font-size: 32px;
+  font-weight: var(--font-weight-bold);
+  color: #00b42a;
 }
 
-.action-icon {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  font-size: 20px;
-  transition: all var(--transition-slow);
-}
-
-.action-icon-purple {
-  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
-  color: #7c3aed;
-}
-
-.action-icon-indigo {
-  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-  color: #6366f1;
-}
-
-.action-icon-blue {
-  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-  color: #3b82f6;
-}
-
-.action-icon-cyan {
-  background: linear-gradient(135deg, #cffafe, #a5f3fc);
-  color: #0891b2;
-}
-
-.action-label {
+.pass-rate-label {
   font-size: var(--font-size-sm);
-  color: var(--gray-600);
-  font-weight: var(--font-weight-medium);
+  color: var(--gray-500);
+  margin-top: 4px;
+}
+
+/* ---- 表格卡片 ---- */
+.table-card {
+  height: 100%;
+}
+
+.table-card :deep(.arco-card-body) {
+  padding: 0 20px 20px;
+}
+
+.text-success {
+  color: #00b42a;
+  font-weight: 500;
+}
+
+.text-danger {
+  color: #f53f3f;
+  font-weight: 500;
 }
 </style>
