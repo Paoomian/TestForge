@@ -82,6 +82,19 @@ from .config import settings
 - **TypeScript**: 使用严格模式，明确类型定义
 - **Vue**: 使用 Composition API + `<script setup>`
 
+### 数据库规范
+
+**涉及数据库字段、表结构的改动，必须同步更新数据库升级脚本**：
+
+- 新增表：在 `server/migrations/upgrade_all.py` 中添加 `ensure_xxx` 函数
+- 新增字段：在对应的 `upgrade_xxx_columns` 函数中添加 `safe_add_column` 调用
+- 修改字段：在升级脚本中添加兼容性处理（检查后再修改）
+
+升级脚本要求：
+- 可重复执行，不会产生副作用
+- 使用 `table_exists` / `column_exists` 检查后再操作
+- 添加清晰的中文注释说明每步操作
+
 ### UI 设计规范
 
 **风格**: 淡蓝紫低饱和渐变、清新科技感。详细规范见 `frontend/UI_STYLE_GUIDE.md`。
@@ -136,5 +149,5 @@ from .config import settings
 
 ---
 
-**最后更新**: 2026-05-22（场景编排报告页 + 任务列表模式分类）
+**最后更新**: 2026-06-08（新增数据库规范：涉及表结构改动必须更新升级脚本）
 ```

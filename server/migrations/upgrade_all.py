@@ -441,6 +441,34 @@ def ensure_ai_generate_tasks(conn):
     print("  + 创建表 ai_generate_tasks")
 
 
+def ensure_monkey_presets(conn):
+    """创建 monkey_presets 表（如不存在）"""
+    if table_exists(conn, "monkey_presets"):
+        return
+    conn.execute(text("""
+        CREATE TABLE monkey_presets (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL COMMENT '配置名称',
+            user_id INT NOT NULL,
+            pct_touch INT DEFAULT 15 COMMENT '触摸事件(%)',
+            pct_motion INT DEFAULT 10 COMMENT '滑动事件(%)',
+            pct_trackball INT DEFAULT 15 COMMENT '轨迹球(%)',
+            pct_nav INT DEFAULT 20 COMMENT '基本导航(%)',
+            pct_majornav INT DEFAULT 15 COMMENT '主要导航(%)',
+            pct_syskeys INT DEFAULT 5 COMMENT '系统按键(%)',
+            pct_appswitch INT DEFAULT 2 COMMENT 'Activity切换(%)',
+            pct_anyevent INT DEFAULT 18 COMMENT '其他事件(%)',
+            event_count INT DEFAULT 1000 COMMENT '事件总数',
+            interval INT DEFAULT 300 COMMENT '事件间隔(ms)',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            INDEX ix_monkey_presets_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """))
+    print("  + 创建表 monkey_presets")
+
+
 # ==================== 主入口 ====================
 
 def ensure_innodb(conn):
@@ -486,6 +514,7 @@ def upgrade():
         ensure_ai_provider_configs(conn)
         ensure_ai_skills(conn)
         ensure_ai_generate_tasks(conn)
+        ensure_monkey_presets(conn)
 
         # 2. 补全缺失的字段
         print("\n[2/6] 补全缺失的字段...")
