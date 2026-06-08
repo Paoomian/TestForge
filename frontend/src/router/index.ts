@@ -92,6 +92,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/tools/ToolsPage.vue')
       },
       {
+        path: 'monkey',
+        name: 'monkey',
+        component: () => import('@/views/tools/MonkeyTest.vue')
+      },
+      {
         path: 'ai-generate',
         name: 'ai-generate',
         component: () => import('@/views/ai-generate/index.vue')

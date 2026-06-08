@@ -106,20 +106,13 @@
             AI 生成用例
           </a-menu-item>
 
-          <a-sub-menu key="reports">
-            <template #icon>
-              <icon-file />
-            </template>
-            <template #title>测试报告</template>
-            <a-menu-item key="report-list">报告列表</a-menu-item>
-          </a-sub-menu>
-
           <a-sub-menu key="tools">
             <template #icon>
               <icon-tool />
             </template>
-            <template #title>开发工具</template>
+            <template #title>常用工具</template>
             <a-menu-item key="tools">工具目录</a-menu-item>
+            <a-menu-item key="monkey">Monkey测试</a-menu-item>
           </a-sub-menu>
         </a-menu>
       </a-layout-sider>

@@ -110,10 +110,10 @@ export function deleteUICase(id: number) {
 // ========== 录制相关 API ==========
 
 /**
- * 启动录制会话
+ * 启动录制会话（浏览器启动较慢，超时设为50秒）
  */
 export function startRecording(data: RecordingStartParams) {
-  return request.post<RecordingSession>('/ui-recordings/start', data)
+  return request.post<RecordingSession>('/ui-recordings/start', data, { timeout: 50000 })
 }
 
 /**

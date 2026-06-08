@@ -3,7 +3,7 @@
     <!-- 左侧工具卡片列表 -->
     <div class="tools-sidebar">
       <div class="tools-sidebar-header">
-        <h3 class="tools-sidebar-title">开发工具</h3>
+        <h3 class="tools-sidebar-title">常用工具</h3>
       </div>
       <div class="tools-list">
         <div

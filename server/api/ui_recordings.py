@@ -44,7 +44,7 @@ def start_recording(
         )
 
         # 等待浏览器启动完成（首次启动可能需要更长时间）
-        for _ in range(200):  # 最多等待20秒
+        for _ in range(450):  # 最多等待45秒
             if recorder.status in ["recording", "stopped"]:
                 break
             time.sleep(0.1)

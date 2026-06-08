@@ -92,25 +92,41 @@ class UIRecorder:
             # 保持事件循环运行，直到录制停止
             if self.status != "stopped":
                 self._loop.run_forever()
+        except RuntimeError as e:
+            # stop() 在启动阶段调用 loop.stop() 会触发此异常，属于预期行为
+            if "Event loop stopped before Future completed" in str(e):
+                print(f"[RECORDER] 启动过程中被停止，状态: {self.status}")
+            else:
+                print(f"[RECORDER] 录制线程异常: {e}")
+                import traceback
+                traceback.print_exc()
+            self.status = "stopped"
         except Exception as e:
             print(f"[RECORDER] 录制线程异常: {e}")
             import traceback
             traceback.print_exc()
             self.status = "stopped"
         finally:
+            if self._loop.is_closed():
+                return
+            # 启动被中断时，用已停止的 loop 清理 Playwright 资源
+            # run_until_complete 可以在 stop() 后的 loop 上再次调用
+            try:
+                self._loop.run_until_complete(self._stop_playwright())
+            except Exception as e:
+                print(f"[RECORDER] 清理 Playwright 资源异常: {e}")
             # 清理事件循环中的所有任务
             try:
-                # 取消所有未完成的任务
                 pending = asyncio.all_tasks(self._loop)
                 for task in pending:
                     task.cancel()
-                # 等待所有任务完成取消
                 if pending:
                     self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             except Exception as e:
                 print(f"[RECORDER] 清理任务异常: {e}")
             try:
-                self._loop.close()
+                if not self._loop.is_closed():
+                    self._loop.close()
             except Exception as e:
                 print(f"[RECORDER] 关闭事件循环异常: {e}")
 
@@ -119,18 +135,46 @@ class UIRecorder:
         try:
             print(f"[RECORDER] 启动 Playwright...")
             self._playwright = await async_playwright().start()
+            if self.status == "stopped":
+                return
             print(f"[RECORDER] 启动 Chromium 浏览器...")
-            self._browser = await self._playwright.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-gpu"]
+            self._browser = await asyncio.wait_for(
+                self._playwright.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-gpu",
+                        "--disable-dev-shm-usage",
+                        "--disable-extensions",
+                        "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-renderer-backgrounding",
+                    ]
+                ),
+                timeout=15,
             )
+            if self.status == "stopped":
+                return
             print(f"[RECORDER] 创建浏览器上下文...")
-            self._context = await self._browser.new_context(
-                viewport={"width": viewport_width, "height": viewport_height},
-                user_agent=user_agent,
+            self._context = await asyncio.wait_for(
+                self._browser.new_context(
+                    viewport={"width": viewport_width, "height": viewport_height},
+                    user_agent=user_agent,
+                ),
+                timeout=10,
             )
+            if self.status == "stopped":
+                return
+            # 检查浏览器是否仍然连接
+            if not self._browser.is_connected():
+                raise RuntimeError("Chromium 浏览器在创建上下文后断开连接，可能已崩溃")
             print(f"[RECORDER] 创建新页面...")
-            self._page = await self._context.new_page()
+            self._page = await asyncio.wait_for(
+                self._context.new_page(),
+                timeout=25,
+            )
+            if self.status == "stopped":
+                return
 
             # 监听新页面打开事件（target="_blank" 链接、window.open 等）
             self._context.on("page", lambda new_page: asyncio.ensure_future(
@@ -181,30 +225,53 @@ class UIRecorder:
 
             print(f"[RECORDER] 录制会话 {self.session_id} 已启动: {url}")
 
+        except asyncio.TimeoutError:
+            # 诊断信息：判断卡在哪一步
+            if not self._browser:
+                msg = "Chromium 浏览器启动超时（15秒），请检查: 1) playwright install chromium  2) 杀毒软件是否拦截  3) 系统资源是否充足"
+            elif not self._context:
+                msg = "创建浏览器上下文超时（10秒）"
+            elif not self._page:
+                msg = "创建新页面超时（25秒），Chromium 可能已崩溃，请尝试 playwright install chromium 重新安装"
+            else:
+                msg = "浏览器启动超时"
+            print(f"[RECORDER] {msg}")
+            logger.error(msg)
+            raise RuntimeError(msg)
         except Exception as e:
             self.status = "stopped"
+            print(f"[RECORDER] 录制会话启动失败: {type(e).__name__}: {e}")
             logger.error(f"录制会话启动失败: {e}")
             raise
 
     def stop(self) -> list[dict]:
-        """停止录制，返回录制的步骤（同步方法）"""
+        """停止录制，返回录制的步骤（同步方法，幂等）"""
+        # 幂等：已停止则直接返回
+        if self.status == "stopped":
+            return self.steps
+
+        was_starting = self.status == "connecting"
         self.status = "stopped"
-        if self._loop:
+
+        if was_starting:
+            # 还在启动阶段：只设标志，不干预事件循环
+            # 避免取消 future 导致浏览器被 Playwright 关闭（TargetClosedError）
+            # _start_playwright 会通过 asyncio.wait_for 超时后自然退出并清理资源
+            print(f"[RECORDER] 启动阶段停止，后台线程将自行清理")
+            return self.steps
+
+        if self._loop and not self._loop.is_closed():
             if self._loop.is_running():
-                # 在事件循环中执行清理
+                # 录制阶段（run_forever 中），通过协程安全清理
                 try:
                     future = asyncio.run_coroutine_threadsafe(self._stop_playwright(), self._loop)
                     future.result(timeout=5)
                 except Exception as e:
                     print(f"[RECORDER] 停止 Playwright 异常: {e}")
-                # 停止事件循环
                 self._loop.call_soon_threadsafe(self._loop.stop)
-            else:
-                # 事件循环未运行，直接在当前线程执行清理
-                try:
-                    self._loop.run_until_complete(self._stop_playwright())
-                except Exception as e:
-                    print(f"[RECORDER] 停止 Playwright 异常: {e}")
+            # 等待线程结束
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=10)
         return self.steps
 
     async def _stop_playwright(self):

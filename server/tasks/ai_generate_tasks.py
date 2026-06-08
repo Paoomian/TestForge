@@ -5,6 +5,7 @@ import asyncio
 import time
 from datetime import datetime
 from celery import shared_task
+from sqlalchemy import text
 
 from database import SessionLocal
 from models.ai_generate import AIGenerateTask, AIProviderConfig
@@ -224,7 +225,7 @@ def extract_json_from_response(response: str) -> list:
     raise ValueError(f"无法从 AI 响应中提取有效的 JSON 数组。响应前 200 字符: {response[:200]}")
 
 
-@shared_task(bind=True, max_retries=2)
+@shared_task(bind=True, max_retries=3)
 def generate_test_cases(self, task_id: int, config_id: int):
     """生成测试用例的 Celery 任务
 
@@ -232,13 +233,39 @@ def generate_test_cases(self, task_id: int, config_id: int):
         task_id: 任务 ID
         config_id: AI 配置 ID
     """
+    from sqlalchemy.exc import OperationalError, PendingRollbackError
+
     db = SessionLocal()
 
+    def _ensure_session():
+        """确保数据库 session 可用，连接断开时重建"""
+        nonlocal db
+        try:
+            # 检测 session 是否处于异常状态
+            if db.is_active is False:
+                db.rollback()
+        except Exception:
+            pass
+        try:
+            # 执行一次简单查询验证连接可用
+            db.execute(text("SELECT 1"))
+        except (OperationalError, PendingRollbackError):
+            # 连接已断开，关闭旧 session 并创建新的
+            try:
+                db.close()
+            except Exception:
+                pass
+            db = SessionLocal()
+
     def update_progress(progress: int, stage: str):
-        """更新进度和阶段"""
-        task.progress = progress
-        task.error_message = stage  # 临时存储阶段信息
-        db.commit()
+        """更新进度和阶段（带连接恢复）"""
+        _ensure_session()
+        # 重新查询 task 确保 ORM 对象绑定到当前 session
+        current_task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
+        if current_task:
+            current_task.progress = progress
+            current_task.error_message = stage
+            db.commit()
 
     try:
         # 获取任务
@@ -311,11 +338,15 @@ def generate_test_cases(self, task_id: int, config_id: int):
         update_progress(45, "正在发送请求到 AI 服务...")
         time.sleep(0.5)
 
-        # 调用 AI 生成
+        # 调用 AI 生成（耗时操作，期间 MySQL 连接可能超时断开）
         update_progress(55, "AI 正在思考中...")
         response = run_async(provider.chat(messages, task.model_name))
 
-        # AI 调用后
+        # AI 调用后，恢复可能断开的连接，重新查询 task
+        _ensure_session()
+        task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
+        if not task or task.status == "cancelled":
+            return
         update_progress(75, "AI 返回结果，正在解析...")
         time.sleep(0.3)
 
@@ -324,8 +355,6 @@ def generate_test_cases(self, task_id: int, config_id: int):
             generated_cases = extract_json_from_response(response)
         except ValueError as e:
             task.status = "failed"
-            # 保存部分响应内容帮助调试
-            debug_response = response[:300] if len(response) > 300 else response
             task.error_message = f"解析失败: {str(e)[:200]}"
             db.commit()
             return
@@ -341,29 +370,49 @@ def generate_test_cases(self, task_id: int, config_id: int):
         update_progress(85, "正在验证用例格式...")
         time.sleep(0.3)
         update_progress(95, "正在保存结果...")
-        task.generated_cases = generated_cases
-        task.cases_count = len(generated_cases)
-        task.status = "completed"
-        task.progress = 100
-        task.error_message = None  # 清除阶段信息
-        task.completed_at = datetime.utcnow()
-        db.commit()
-
-    except Exception as e:
-        # 任务失败
         task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
         if task:
-            task.status = "failed"
-            task.error_message = str(e)[:500]  # 限制错误消息长度
+            task.generated_cases = generated_cases
+            task.cases_count = len(generated_cases)
+            task.status = "completed"
+            task.progress = 100
+            task.error_message = None
+            task.completed_at = datetime.utcnow()
             db.commit()
 
-        # 重试
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=e, countdown=5)
+    except Exception as e:
+        # 判断是否为可重试的临时错误
+        error_str = str(e)
+        is_retryable = any(kw in error_str for kw in ["504", "502", "503", "429", "timeout", "TimeoutError", "retryable"])
+        # 504/429 等建议等待更长时间
+        retry_countdown = 120 if "504" in error_str or "429" in error_str else 10
+
+        # 任务失败，恢复连接后写入错误状态
+        _ensure_session()
+        task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
+        if task:
+            if is_retryable and self.request.retries < self.max_retries:
+                task.status = "retrying"
+                task.error_message = f"AI 服务暂时不可用，{retry_countdown}秒后重试（{self.request.retries + 1}/{self.max_retries}）"
+            else:
+                task.status = "failed"
+                # 提取友好的错误信息
+                if "504" in error_str:
+                    task.error_message = "AI 服务响应超时（504），请稍后重试或检查 API 配置"
+                elif "429" in error_str:
+                    task.error_message = "AI 服务请求频率过高（429），请稍后重试"
+                else:
+                    task.error_message = error_str[:500]
+            db.commit()
+
+        # 可重试的临时错误：等待后重试
+        if is_retryable and self.request.retries < self.max_retries:
+            raise self.retry(exc=e, countdown=retry_countdown)
 
     finally:
         # 清理上传的临时文件
         try:
+            _ensure_session()
             task = db.query(AIGenerateTask).filter(AIGenerateTask.id == task_id).first()
             if task and task.input_file_path:
                 file_path = task.input_file_path
@@ -375,4 +424,7 @@ def generate_test_cases(self, task_id: int, config_id: int):
                     print(f"[AI生成] 已清理临时文件: {file_path}")
         except Exception as e:
             print(f"[AI生成] 清理临时文件失败: {e}")
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
