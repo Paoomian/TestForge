@@ -85,7 +85,8 @@
             <template #title>UI自动化</template>
             <a-menu-item key="ui-cases">用例管理</a-menu-item>
             <a-menu-item key="ui-record">录制用例</a-menu-item>
-            <a-menu-item key="ui-run">执行测试</a-menu-item>
+            <a-menu-item key="ui-run">任务配置</a-menu-item>
+            <a-menu-item key="ui-batch-tasks">批量任务</a-menu-item>
           </a-sub-menu>
 
           <a-sub-menu key="api-test">
@@ -224,6 +225,7 @@ function debugMenu() {
 ;(window as any).debugMenu = debugMenu
 
 const handleMenuClick = (key: string) => {
+  console.log('菜单点击:', key)
   router.push({ name: key })
 }
 

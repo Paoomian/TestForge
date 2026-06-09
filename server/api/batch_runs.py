@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, APITestCase, Environment, SceneNode
+from models import User, TestRun, TestRunDetail, TestRunStatus, TestRunDetailStatus, APITestCase, UICase, Environment, SceneNode
 from schemas.test_run import (
     BatchRunCreate, BatchRunList, BatchRunInfo, BatchRunDetailSummary, BatchRunDetailFull,
     BatchRunReport, TestSummary, PerformanceStats, FailureAnalysis, FailureCategory, APICallStat,
@@ -26,12 +26,19 @@ async def create_batch_run(
     current_user: User = Depends(check_permission("api_test:execute")),
 ):
     """创建批量执行任务"""
-    # 验证用例存在
-    cases = db.query(APITestCase).filter(APITestCase.id.in_(req.case_ids)).all()
-    if len(cases) != len(req.case_ids):
-        found_ids = {c.id for c in cases}
-        missing = [cid for cid in req.case_ids if cid not in found_ids]
-        raise HTTPException(status_code=400, detail=f"用例不存在: {missing}")
+    # 根据 test_type 验证用例存在
+    if req.test_type == "ui_batch":
+        cases = db.query(UICase).filter(UICase.id.in_(req.case_ids)).all()
+        if len(cases) != len(req.case_ids):
+            found_ids = {c.id for c in cases}
+            missing = [cid for cid in req.case_ids if cid not in found_ids]
+            raise HTTPException(status_code=400, detail=f"UI用例不存在: {missing}")
+    else:
+        cases = db.query(APITestCase).filter(APITestCase.id.in_(req.case_ids)).all()
+        if len(cases) != len(req.case_ids):
+            found_ids = {c.id for c in cases}
+            missing = [cid for cid in req.case_ids if cid not in found_ids]
+            raise HTTPException(status_code=400, detail=f"用例不存在: {missing}")
 
     # 验证并发数
     if req.concurrency not in (1, 3, 5, 10):
@@ -44,13 +51,14 @@ async def create_batch_run(
     # 生成任务名称
     project_id = cases[0].project_id if cases else 0
     now = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    task_name = f"批量执行-{now}"
+    prefix = "UI批量执行" if req.test_type == "ui_batch" else "批量执行"
+    task_name = f"{prefix}-{now}"
 
     # 创建任务
     test_run = TestRun(
         project_id=project_id,
         name=task_name,
-        test_type="api_batch",
+        test_type=req.test_type,
         case_ids=req.case_ids,
         environment_id=req.environment_id,
         concurrency=req.concurrency,
@@ -64,25 +72,44 @@ async def create_batch_run(
     db.flush()
 
     # 创建用例执行明细（附带用例快照）
-    case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(req.case_ids)).all()}
-    for order, case_id in enumerate(req.case_ids, start=1):
-        case = case_snapshot.get(case_id)
-        detail = TestRunDetail(
-            test_run_id=test_run.id,
-            case_id=case_id,
-            case_name=case.name if case else None,
-            case_number=case.case_number if case else None,
-            execution_order=order,
-            status=TestRunDetailStatus.PENDING,
-        )
-        db.add(detail)
+    if req.test_type == "ui_batch":
+        case_snapshot = {c.id: c for c in db.query(UICase).filter(UICase.id.in_(req.case_ids)).all()}
+        for order, case_id in enumerate(req.case_ids, start=1):
+            case = case_snapshot.get(case_id)
+            detail = TestRunDetail(
+                test_run_id=test_run.id,
+                case_id=None,  # UI用例不设置case_id，避免外键冲突
+                case_number=str(case_id),  # 用case_number字段存储UI用例ID
+                case_name=case.name if case else None,
+                execution_order=order,
+                status=TestRunDetailStatus.PENDING,
+                node_type="ui_case",  # 标记为UI用例
+            )
+            db.add(detail)
+    else:
+        case_snapshot = {c.id: c for c in db.query(APITestCase).filter(APITestCase.id.in_(req.case_ids)).all()}
+        for order, case_id in enumerate(req.case_ids, start=1):
+            case = case_snapshot.get(case_id)
+            detail = TestRunDetail(
+                test_run_id=test_run.id,
+                case_id=case_id,
+                case_name=case.name if case else None,
+                case_number=case.case_number if case else None,
+                execution_order=order,
+                status=TestRunDetailStatus.PENDING,
+            )
+            db.add(detail)
 
     db.commit()
     db.refresh(test_run)
 
-    # 延迟导入避免循环依赖
-    from tasks.batch_run_task import batch_run_task
-    task = batch_run_task.delay(test_run.id)
+    # 根据 test_type 调用不同的 Celery 任务
+    if req.test_type == "ui_batch":
+        from tasks.ui_batch_run_task import ui_batch_run_task
+        task = ui_batch_run_task.delay(test_run.id, req.browser, req.viewport_width, req.viewport_height)
+    else:
+        from tasks.batch_run_task import batch_run_task
+        task = batch_run_task.delay(test_run.id)
 
     return _build_run_info(test_run, db)
 
@@ -124,11 +151,15 @@ async def list_batch_runs(
     page_size: int = Query(20, ge=1, le=100),
     status: str = Query(None),
     config_mode: str = Query(None),
+    test_type: str = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """查询任务列表"""
-    query = db.query(TestRun).filter(TestRun.test_type.in_(["api_batch", "api_scene"]))
+    if test_type:
+        query = db.query(TestRun).filter(TestRun.test_type == test_type)
+    else:
+        query = db.query(TestRun).filter(TestRun.test_type.in_(["api_batch", "api_scene"]))
 
     # 状态筛选
     if status:

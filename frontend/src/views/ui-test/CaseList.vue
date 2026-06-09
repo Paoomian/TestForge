@@ -32,8 +32,20 @@
         <div class="list-toolbar">
           <div class="toolbar-left">
             <h3 class="list-title">{{ currentProjectName || '请选择项目' }}</h3>
+            <span v-if="selectedRowKeys.length > 0" class="selected-count">
+              已选 {{ selectedRowKeys.length }} 项
+            </span>
           </div>
           <div class="toolbar-right">
+            <a-button
+              v-if="selectedRowKeys.length > 0"
+              type="primary"
+              status="success"
+              @click="handleBatchRun"
+            >
+              <template #icon><icon-play-arrow /></template>
+              批量执行
+            </a-button>
             <a-button type="primary" @click="goToRecord">
               <template #icon><icon-video-camera /></template>
               录制新用例
@@ -44,9 +56,12 @@
         <!-- 用例表格 -->
         <div class="case-table-wrapper">
           <a-table
+            v-model:selectedKeys="selectedRowKeys"
             :data="cases"
             :loading="loading"
             :pagination="pagination"
+            :row-selection="{ type: 'checkbox' }"
+            row-key="id"
             @page-change="onPageChange"
             @page-size-change="onPageSizeChange"
           >
@@ -95,6 +110,13 @@
         </div>
       </a-layout-content>
     </a-layout>
+
+    <!-- 批量执行配置抽屉 -->
+    <UIBatchRunDrawer
+      v-model:visible="batchDrawerVisible"
+      :cases="batchDrawerCases"
+      @success="handleBatchRunSuccess"
+    />
 
     <!-- 用例详情弹窗 -->
     <a-modal
@@ -145,6 +167,7 @@ import {
 import { useRouter } from 'vue-router'
 import { getUICaseList, deleteUICase, type UICase } from '@/api/uiCase'
 import { getProjects, type Project } from '@/api/project'
+import UIBatchRunDrawer from './components/UIBatchRunDrawer.vue'
 
 const router = useRouter()
 
@@ -169,8 +192,14 @@ const detailVisible = ref(false)
 const detailCase = ref<UICase | null>(null)
 
 // 执行相关
-const runResultVisible = ref(false)
 const runningCaseId = ref<number | null>(null)
+
+// 多选相关
+const selectedRowKeys = ref<number[]>([])
+
+// 批量执行抽屉
+const batchDrawerVisible = ref(false)
+const batchDrawerCases = ref<UICase[]>([])
 
 // ========== 计算属性 ==========
 
@@ -279,6 +308,22 @@ async function handleDelete(caseItem: UICase) {
       }
     },
   })
+}
+
+function handleBatchRun() {
+  const selectedCases = cases.value.filter(c => selectedRowKeys.value.includes(c.id))
+  if (selectedCases.length === 0) {
+    Message.warning('请先选择要执行的用例')
+    return
+  }
+  batchDrawerCases.value = selectedCases
+  batchDrawerVisible.value = true
+}
+
+function handleBatchRunSuccess(runId: number) {
+  batchDrawerVisible.value = false
+  selectedRowKeys.value = []
+  router.push({ name: 'ui-batch-run-detail', params: { runId } })
 }
 
 function formatTime(time: string): string {

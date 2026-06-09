@@ -469,6 +469,34 @@ def ensure_monkey_presets(conn):
     print("  + 创建表 monkey_presets")
 
 
+def ensure_ui_test_suites(conn):
+    """创建 ui_test_suites 表（如不存在）"""
+    if table_exists(conn, "ui_test_suites"):
+        return
+    conn.execute(text("""
+        CREATE TABLE ui_test_suites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(200) NOT NULL,
+            description TEXT,
+            case_ids JSON DEFAULT NULL,
+            environment_id INT,
+            failure_strategy VARCHAR(20) DEFAULT 'continue',
+            browser VARCHAR(20) DEFAULT 'chrome',
+            viewport_width INT DEFAULT 1280,
+            viewport_height INT DEFAULT 720,
+            tags JSON DEFAULT NULL,
+            creator_id INT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id),
+            FOREIGN KEY (environment_id) REFERENCES environments(id),
+            FOREIGN KEY (creator_id) REFERENCES users(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """))
+    print("  + 创建表 ui_test_suites")
+
+
 # ==================== 主入口 ====================
 
 def ensure_innodb(conn):
@@ -515,6 +543,7 @@ def upgrade():
         ensure_ai_skills(conn)
         ensure_ai_generate_tasks(conn)
         ensure_monkey_presets(conn)
+        ensure_ui_test_suites(conn)
 
         # 2. 补全缺失的字段
         print("\n[2/6] 补全缺失的字段...")

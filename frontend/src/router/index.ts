@@ -39,12 +39,22 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'ui-run',
         name: 'ui-run',
-        component: () => import('@/views/ui-test/Run.vue')
+        component: () => import('@/views/ui-test/UITestSuiteList.vue')
       },
       {
         path: 'ui-run-debug/:caseId',
         name: 'ui-run-debug',
         component: () => import('@/views/ui-test/RunDebug.vue')
+      },
+      {
+        path: 'ui-batch-run/:runId',
+        name: 'ui-batch-run-detail',
+        component: () => import('@/views/ui-test/UIBatchRunDetail.vue')
+      },
+      {
+        path: 'ui-batch-tasks',
+        name: 'ui-batch-tasks',
+        component: () => import('@/views/ui-test/UIBatchTaskList.vue')
       },
       {
         path: 'api-cases',

@@ -48,6 +48,11 @@ class BatchRunCreate(BaseModel):
     concurrency: int = 1  # 1/3/5/10
     failure_strategy: str = "continue"  # continue / stop
     variables: dict[str, str] = {}
+    test_type: str = "api_batch"  # api_batch / ui_batch
+    # UI 批量执行专用参数
+    browser: Optional[str] = "chrome"
+    viewport_width: Optional[int] = 1280
+    viewport_height: Optional[int] = 720
 
 
 class BatchRunDetailSummary(BaseModel):

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from database import engine, Base
-from api import auth, projects, api_cases, ui_cases, api_test_cases, environments, test_runner, batch_runs, ws_batch, test_suites, scene_nodes, ai_generate, ai_skills, ui_recordings, ws_ui_record, ui_runner, ws_ui_run, ws_ui_preview, monkey, ws_monkey, dashboard
+from api import auth, projects, api_cases, ui_cases, api_test_cases, environments, test_runner, batch_runs, ws_batch, test_suites, scene_nodes, ai_generate, ai_skills, ui_recordings, ws_ui_record, ui_runner, ws_ui_run, ws_ui_preview, monkey, ws_monkey, dashboard, ui_test_suites
 
 Base.metadata.create_all(bind=engine)
 
@@ -42,6 +42,7 @@ app.include_router(ui_runner.router, prefix=f"{settings.API_V1_STR}/ui-runner", 
 app.include_router(monkey.router, prefix=f"{settings.API_V1_STR}/monkey", tags=["monkey"])
 app.include_router(ws_monkey.router, tags=["websocket"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
+app.include_router(ui_test_suites.router, prefix=f"{settings.API_V1_STR}/ui-test-suites", tags=["ui-test-suites"])
 
 # 自动重定向斜杠（确保 /api/v1/ui-cases 和 /api/v1/ui-cases/ 都能访问）
 # app.router.redirect_slashes = False

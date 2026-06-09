@@ -18,6 +18,7 @@ from .scene_node import SceneNode, SceneNodeType, ConditionOperator, AssignSourc
 from .ai_generate import AIProviderConfig, AIGenerateTask
 from .ai_skill import AISkill
 from .monkey import MonkeyPreset
+from .ui_test_suite import UITestSuite
 
 __all__ = [
     "User",
@@ -46,4 +47,5 @@ __all__ = [
     "ConditionOperator",
     "AssignSource",
     "MonkeyPreset",
+    "UITestSuite",
 ]
