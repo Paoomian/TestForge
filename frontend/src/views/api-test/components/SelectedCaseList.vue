@@ -10,7 +10,7 @@
     </div>
 
     <div v-if="cases.length === 0" class="empty-state">
-      <icon-inbox :size="32" />
+      <icon-empty :size="32" />
       <span>暂未选择用例</span>
     </div>
 
@@ -28,7 +28,7 @@
         @dragend="onDragEnd"
       >
         <div class="drag-handle">
-          <icon-drag-arrow-vertical />
+          <icon-drag-dot-vertical />
         </div>
         <div class="case-index">{{ index + 1 }}</div>
         <div class="case-info">
@@ -53,6 +53,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import {
+  IconSwap,
+  IconEmpty,
+  IconDragDotVertical,
+  IconClose,
+} from '@arco-design/web-vue/es/icon'
 import type { APITestCase } from '@/api/apiTestCase'
 
 const props = defineProps<{

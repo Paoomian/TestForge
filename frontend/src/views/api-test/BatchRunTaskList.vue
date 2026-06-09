@@ -79,7 +79,7 @@
               :columns="columns"
               :data="group.items"
               :pagination="false"
-              :row-key="(record: BatchRunListItem) => record.id"
+              row-key="id"
               size="small"
             >
               <template #checkbox="{ record }">

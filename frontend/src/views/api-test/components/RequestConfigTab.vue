@@ -26,7 +26,7 @@
     </div>
 
     <!-- Tabs: Headers / Query / Body / Auth -->
-    <a-tabs default-active-key="headers" size="small">
+    <a-tabs default-active-key="headers" size="small" :destroy-on-hide="false">
       <a-tab-pane key="headers">
         <template #title>
           Headers

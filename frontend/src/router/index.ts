@@ -110,6 +110,29 @@ const router = createRouter({
   routes
 })
 
+// 空闲时预加载 heavy 路由 chunk，减少首次点击延迟
+const heavyRoutes = [
+  () => import('@/views/api-debug/Index.vue'),
+  () => import('@/views/api-test/TestCaseManage.vue'),
+  () => import('@/views/api-test/TestSuiteList.vue'),
+  () => import('@/views/ui-test/Record.vue'),
+]
+
+function preloadHeavyRoutes() {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      heavyRoutes.forEach(fn => fn().catch(() => {}))
+    })
+  } else {
+    setTimeout(() => {
+      heavyRoutes.forEach(fn => fn().catch(() => {}))
+    }, 2000)
+  }
+}
+
+// 页面加载完成后 1 秒开始预加载
+setTimeout(preloadHeavyRoutes, 1000)
+
 router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
 

@@ -131,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
 import { useUserStore } from '@/stores/user'
@@ -159,6 +159,69 @@ const cachedViews = ['TestCaseManage']
 const handleCollapse = (val: boolean) => {
   collapsed.value = val
 }
+
+// 调试：收起/展开后在控制台执行 debugMenu() 查看对比
+function debugMenu() {
+  const sider = document.querySelector('.layout-sider')
+  if (!sider) { console.log('找不到 .layout-sider'); return }
+
+  const isCollapsed = !!sider.querySelector('.arco-menu-collapsed')
+
+  // 收起时 sub-menu 可能用 pop 模式（.arco-menu-pop-header）而非 inline 模式
+  const firstItem = sider.querySelector('.arco-menu-item')
+  const firstHeader = sider.querySelector('.arco-menu-inline-header, .arco-menu-pop-header')
+
+  if (!firstItem) { console.log('找不到 .arco-menu-item'); return }
+  if (!firstHeader) {
+    // 打印所有子元素 class 帮助定位
+    console.log('找不到 inline-header / pop-header，当前 sider 内的 class 列表：')
+    sider.querySelectorAll('[class*="arco-menu"]').forEach(el => {
+      const rect = el.getBoundingClientRect()
+      if (rect.height > 0) console.log(`  .${el.className.split(' ').join('.')}  height=${rect.height.toFixed(1)} width=${rect.width.toFixed(1)}`)
+    })
+    return
+  }
+
+  // 收集所有可见行
+  const allItems = sider.querySelectorAll('.arco-menu-item')
+  const allHeaders = sider.querySelectorAll('.arco-menu-inline-header, .arco-menu-pop-header')
+  const allVisibleRows = [...Array.from(allItems), ...Array.from(allHeaders)]
+    .filter(el => el.getBoundingClientRect().height > 0)
+
+  const heights = allVisibleRows.map(el => el.getBoundingClientRect().height)
+  const widths = allVisibleRows.map(el => el.getBoundingClientRect().width)
+
+  console.group(`%c菜单 ${isCollapsed ? '收起' : '展开'} 状态`, 'color: #8b5cf6; font-weight: bold; font-size: 14px')
+
+  console.log('%c可见行数:', 'color: #3b82f6', allVisibleRows.length)
+  console.log('%c行高:', 'color: #3b82f6', heights.map(h => h.toFixed(1)).join(', '))
+  console.log('%c行宽:', 'color: #3b82f6', widths.map(w => w.toFixed(1)).join(', '))
+  console.log('行高一致?', heights.every(h => Math.abs(h - heights[0]) < 1) ? '✅' : '❌')
+
+  const ir = firstItem.getBoundingClientRect()
+  const hr = firstHeader.getBoundingClientRect()
+  console.log(`%cmenu-item:`, 'color: #3b82f6', `top=${ir.top.toFixed(1)} height=${ir.height.toFixed(1)} width=${ir.width.toFixed(1)}`)
+  console.log(`%csub-menu-header:`, 'color: #10b981', `top=${hr.top.toFixed(1)} height=${hr.height.toFixed(1)} width=${hr.width.toFixed(1)} class=${firstHeader.className}`)
+  console.log('高度差:', Math.abs(ir.height - hr.height).toFixed(1) + 'px', Math.abs(ir.height - hr.height) < 1 ? '✅' : '❌')
+  console.log('宽度差:', Math.abs(ir.width - hr.width).toFixed(1) + 'px', Math.abs(ir.width - hr.width) < 1 ? '✅' : '❌')
+
+  const itemIcon = firstItem.querySelector('.arco-icon')
+  const headerIcon = firstHeader.querySelector('.arco-icon')
+  if (itemIcon && headerIcon) {
+    const iir = itemIcon.getBoundingClientRect()
+    const hir = headerIcon.getBoundingClientRect()
+    console.log('%c图标对比:', 'color: #f59e0b')
+    console.log('  item   icon:', `left=${iir.left.toFixed(1)} top=${iir.top.toFixed(1)} center=${(iir.left + iir.width / 2).toFixed(1)}`)
+    console.log('  header icon:', `left=${hir.left.toFixed(1)} top=${hir.top.toFixed(1)} center=${(hir.left + hir.width / 2).toFixed(1)}`)
+    console.log('  水平对齐?', Math.abs(iir.left - hir.left) < 1 ? '✅' : `❌ 差${Math.abs(iir.left - hir.left).toFixed(1)}px`)
+  } else {
+    console.log('找不到图标元素', { itemIcon: !!itemIcon, headerIcon: !!headerIcon })
+  }
+
+  console.groupEnd()
+}
+
+;(window as any).debugMenu = debugMenu
 
 const handleMenuClick = (key: string) => {
   router.push({ name: key })
@@ -275,19 +338,6 @@ const handleLogout = () => {
   background: var(--gradient-sidebar) !important;
   border-right: 1px solid rgba(224, 212, 252, 0.25) !important;
   box-shadow: 2px 0 8px rgba(99, 102, 241, 0.03);
-  overflow: hidden !important;
-}
-
-.layout-sider :deep(.arco-layout-sider-children) {
-  overflow: hidden !important;
-}
-
-.layout-sider :deep(.arco-menu) {
-  overflow: hidden !important;
-}
-
-.layout-sider :deep(.arco-menu-inner) {
-  overflow: hidden !important;
 }
 
 .layout-body {
@@ -303,5 +353,51 @@ const handleLogout = () => {
 .content-wrapper {
   padding: var(--content-padding);
   min-height: calc(100vh - var(--header-height));
+}
+</style>
+
+<style>
+/*
+ * 侧边栏菜单收起状态修复
+ * 收起时 Arco 把 sub-menu 渲染为 .arco-menu-pop（popup 模式），
+ * 与 .arco-menu-item 宽度/内边距不同，导致图标不对齐。
+ * 修复：统一尺寸、清零所有内边距/外边距，用 flex 居中图标。
+ */
+
+/* 统一外层容器 */
+.layout-sider .arco-menu-collapsed .arco-menu-item,
+.layout-sider .arco-menu-collapsed .arco-menu-pop {
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+/* 清零图标容器的 margin/padding */
+.layout-sider .arco-menu-collapsed .arco-menu-item .arco-menu-icon,
+.layout-sider .arco-menu-collapsed .arco-menu-pop .arco-menu-icon {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 清零图标本身的 margin */
+.layout-sider .arco-menu-collapsed .arco-menu-item .arco-icon,
+.layout-sider .arco-menu-collapsed .arco-menu-pop .arco-icon {
+  margin: 0 !important;
+}
+
+/* 隐藏文字 */
+.layout-sider .arco-menu-collapsed .arco-menu-item .arco-menu-title,
+.layout-sider .arco-menu-collapsed .arco-menu-pop .arco-menu-title {
+  display: none !important;
+}
+
+/* 隐藏子菜单箭头 */
+.layout-sider .arco-menu-collapsed .arco-menu-pop .arco-menu-icon-suffix {
+  display: none !important;
 }
 </style>

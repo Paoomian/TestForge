@@ -1,6 +1,6 @@
 <template>
   <div class="script-tab">
-    <a-tabs default-active-key="pre" size="small">
+    <a-tabs default-active-key="pre" size="small" :destroy-on-hide="false">
       <a-tab-pane key="pre" title="前置脚本">
         <p style="color: var(--color-text-3); font-size: 12px; margin-bottom: 8px;">
           在请求发送前执行的JavaScript脚本，可用于动态修改请求参数

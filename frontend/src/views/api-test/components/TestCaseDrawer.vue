@@ -3,7 +3,6 @@
     v-model:visible="visible"
     :title="isEdit ? '编辑用例' : '新建用例'"
     width="900px"
-    unmount-on-close
     @cancel="handleCancel"
   >
     <!-- 工具栏 -->
@@ -20,7 +19,7 @@
       </a-space>
     </template>
 
-    <a-tabs v-model:active-key="activeTab">
+    <a-tabs v-model:active-key="activeTab" :destroy-on-hide="false">
       <!-- Tab1: 基本信息 -->
       <a-tab-pane key="basic" title="基本信息">
         <BasicInfoTab

@@ -27,6 +27,18 @@ export default defineConfig({
   optimizeDeps: {
     include: ['monaco-editor']
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Monaco Editor 单独拆包（~1MB+），避免阻塞首屏
+          'monaco-editor': ['monaco-editor'],
+          // Arco Design 单独拆包
+          'arco-design': ['@arco-design/web-vue'],
+        }
+      }
+    }
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

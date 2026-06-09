@@ -12,7 +12,7 @@
         <span class="target-text">{{ target.text || target.selector }}</span>
       </div>
 
-      <a-form layout="vertical" style="margin-top: 16px">
+      <a-form :model="{ value: inputValue }" layout="vertical" style="margin-top: 16px">
         <a-form-item label="输入内容">
           <a-input
             v-model="inputValue"

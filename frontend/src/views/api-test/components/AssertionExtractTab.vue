@@ -1,6 +1,6 @@
 <template>
   <div class="assertion-extract-tab">
-    <a-tabs default-active-key="assertions" size="small">
+    <a-tabs default-active-key="assertions" size="small" :destroy-on-hide="false">
       <a-tab-pane key="assertions">
         <template #title>
           断言
