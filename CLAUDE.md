@@ -95,6 +95,25 @@ from .config import settings
 - 使用 `table_exists` / `column_exists` 检查后再操作
 - 添加清晰的中文注释说明每步操作
 
+### Celery 任务规范
+
+**新增 Celery 任务必须注册到 `celery_app.py`**：
+
+```python
+# server/celery_app.py
+celery_app.conf.include = [
+    "tasks.batch_run_task",
+    "tasks.scene_run_task",
+    "tasks.ai_generate_tasks",
+    "tasks.ui_batch_run_task",  # 新增任务
+]
+```
+
+任务文件规范：
+- 任务文件放在 `server/tasks/` 目录下
+- 使用 `@celery_app.task(bind=True, name="tasks.xxx")` 装饰器
+- 任务内部使用 `asyncio.run()` 执行异步代码
+
 ### UI 设计规范
 
 **风格**: 淡蓝紫低饱和渐变、清新科技感。详细规范见 `frontend/UI_STYLE_GUIDE.md`。
@@ -120,19 +139,41 @@ from .config import settings
 示例格式：
 
 ```markdown
+## 已完成功能
+
+### 接口自动化
+- [x] 接口调试（单接口调试）
+- [x] 接口用例管理（CRUD）
+- [x] 接口自动化执行（单用例调试执行）
+- [x] 接口自动化批量执行（含进度跟踪）
+- [x] 用例场景编排（条件/循环/变量）
+- [x] 测试报告生成（统计/性能/失败分析）
+- [x] 任务配置（可保存、反复执行）
+
+### UI自动化
+- [x] UI用例录制（Playwright录制）
+- [x] UI用例管理（CRUD）
+- [x] UI用例单个执行
+- [x] UI用例批量执行（含实时截图）
+- [x] UI任务配置（可保存、反复执行）
+- [x] 批量任务列表和详情
+
+### 通用功能
+- [x] 仪表盘（统计/趋势/通过率）
+- [x] 项目管理
+- [x] 环境管理
+- [x] Monkey稳定性测试
+- [x] AI生成用例
+- [x] 工具箱（JSON/时间戳/编解码等）
+
 ## 待开发功能
 
-- [ ] UI自动化录制与执行
-- [ ] 接口自动化录制 (mitmproxy)
-- [x] 接口自动化执行（单用例调试执行已完成）
-- [x] 接口自动化批量执行（含进度跟踪）
-- [x] 测试报告生成（统计/性能/失败分析）
-- [x] 用例场景编排（前端完成，后端待开发）
-- [ ] 定时任务调度 (Celery)
+- [ ] 定时任务调度 (Celery Beat)
 - [ ] CI/CD集成
 - [ ] 测试数据管理
 - [ ] Mock服务
 - [ ] 性能测试
+- [ ] 接口自动化录制 (mitmproxy)
 
 ## 故障排查
 
@@ -149,5 +190,5 @@ from .config import settings
 
 ---
 
-**最后更新**: 2026-06-08（新增数据库规范：涉及表结构改动必须更新升级脚本）
+**最后更新**: 2026-06-09（新增UI自动化批量执行、任务配置、Celery任务规范）
 ```
