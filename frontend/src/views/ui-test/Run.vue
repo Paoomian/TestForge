@@ -8,54 +8,130 @@
       </div>
     </div>
 
-    <!-- 配置区域 -->
-    <a-card :bordered="false" class="config-card">
-      <a-form :model="form" layout="vertical">
-        <!-- 选择用例 -->
-        <a-form-item label="选择用例" required>
-          <div class="case-selector">
-            <a-button type="outline" @click="showCaseSelector = true">
-              <template #icon><icon-plus /></template>
-              选择用例 ({{ selectedCases.length }} 已选)
-            </a-button>
-            <div v-if="selectedCases.length > 0" class="selected-cases">
-              <a-tag
-                v-for="c in selectedCases"
-                :key="c.id"
-                closable
-                @close="removeCase(c.id)"
-              >
-                {{ c.name }}
+    <!-- 筛选栏 -->
+    <a-card :bordered="false" style="margin-bottom: 16px">
+      <a-space wrap>
+        <a-select
+          v-model="selectorProjectId"
+          placeholder="选择项目"
+          style="width: 180px"
+          @change="onProjectChange"
+        >
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </a-option>
+        </a-select>
+        <a-input
+          v-model="selectorKeyword"
+          placeholder="搜索用例名称"
+          style="width: 200px"
+          allow-clear
+          @press-enter="loadCases"
+        >
+          <template #prefix><icon-search /></template>
+        </a-input>
+        <a-select
+          v-model="selectorPriority"
+          placeholder="优先级"
+          style="width: 120px"
+          allow-clear
+          @change="loadCases"
+        >
+          <a-option value="P0">P0 致命</a-option>
+          <a-option value="P1">P1 严重</a-option>
+          <a-option value="P2">P2 一般</a-option>
+          <a-option value="P3">P3 轻微</a-option>
+        </a-select>
+        <a-select
+          v-model="selectorModule"
+          placeholder="模块"
+          style="width: 150px"
+          allow-clear
+          @change="loadCases"
+        >
+          <a-option v-for="m in moduleOptions" :key="m.value" :value="m.value">
+            {{ m.label }}
+          </a-option>
+        </a-select>
+        <a-button type="primary" @click="loadCases">
+          <template #icon><icon-search /></template>
+          搜索
+        </a-button>
+        <a-button @click="resetFilters">
+          <template #icon><icon-refresh /></template>
+          重置
+        </a-button>
+      </a-space>
+    </a-card>
+
+    <!-- 用例表格 -->
+    <a-card :bordered="false" style="margin-bottom: 16px">
+      <a-table
+        v-model:selectedKeys="selectedCaseIds"
+        :data="caseList"
+        :loading="caseLoading"
+        :pagination="false"
+        :row-selection="{ type: 'checkbox' }"
+        row-key="id"
+        :scroll="{ y: 400 }"
+      >
+        <template #columns>
+          <a-table-column title="编号" data-index="case_number" :width="120" />
+          <a-table-column title="用例名称" data-index="name" />
+          <a-table-column title="模块" data-index="module" :width="120">
+            <template #cell="{ record }">
+              <span v-if="record.module">{{ record.module }}</span>
+              <span v-else class="text-gray">-</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="优先级" :width="90">
+            <template #cell="{ record }">
+              <a-tag size="small" :color="getPriorityColor(record.priority)">
+                {{ record.priority || 'P2' }}
               </a-tag>
-            </div>
-          </div>
-        </a-form-item>
+            </template>
+          </a-table-column>
+          <a-table-column title="步骤数" :width="80">
+            <template #cell="{ record }">
+              {{ record.steps?.length || 0 }} 步
+            </template>
+          </a-table-column>
+        </template>
+      </a-table>
+    </a-card>
 
-        <!-- 执行环境 -->
-        <a-form-item label="执行环境">
-          <a-select
-            v-model="form.environment_id"
-            placeholder="选择环境（可选）"
-            allow-clear
-            :loading="envLoading"
-          >
-            <a-option v-for="env in environments" :key="env.id" :value="env.id">
-              {{ env.name }}
-            </a-option>
-          </a-select>
-        </a-form-item>
-
-        <!-- 失败策略 -->
-        <a-form-item label="失败策略">
-          <a-radio-group v-model="form.failure_strategy">
-            <a-radio value="continue">继续执行后续用例</a-radio>
-            <a-radio value="stop">遇到失败停止执行</a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <!-- 浏览器配置 -->
-        <a-row :gutter="16">
-          <a-col :span="12">
+    <!-- 已选用例 + 执行配置 -->
+    <a-row :gutter="16">
+      <a-col :span="14">
+        <a-card :bordered="false" title="已选用例">
+          <UISelectedCaseList
+            :cases="selectedCases"
+            @remove="removeCase"
+            @reorder="reorderCases"
+          />
+        </a-card>
+      </a-col>
+      <a-col :span="10">
+        <a-card :bordered="false" title="执行配置">
+          <a-form :model="form" layout="vertical">
+            <a-form-item label="执行环境">
+              <a-select
+                v-model="form.environment_id"
+                placeholder="选择环境（可选）"
+                allow-clear
+                :loading="envLoading"
+              >
+                <a-option v-for="env in environments" :key="env.id" :value="env.id">
+                  {{ env.name }}
+                </a-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item label="失败策略">
+              <a-radio-group v-model="form.failure_strategy">
+                <a-radio value="continue">继续执行</a-radio>
+                <a-radio value="stop">遇到失败停止</a-radio>
+              </a-radio-group>
+            </a-form-item>
             <a-form-item label="浏览器">
               <a-select v-model="form.browser">
                 <a-option value="chrome">Chrome</a-option>
@@ -63,8 +139,6 @@
                 <a-option value="edge">Edge</a-option>
               </a-select>
             </a-form-item>
-          </a-col>
-          <a-col :span="12">
             <a-form-item label="视口尺寸">
               <a-select v-model="form.viewport">
                 <a-option value="1280x720">1280 x 720</a-option>
@@ -72,89 +146,38 @@
                 <a-option value="375x812">iPhone (375 x 812)</a-option>
               </a-select>
             </a-form-item>
-          </a-col>
-        </a-row>
+          </a-form>
+        </a-card>
+      </a-col>
+    </a-row>
 
-        <!-- 执行按钮 -->
-        <a-form-item>
-          <a-button
-            type="primary"
-            size="large"
-            :disabled="selectedCases.length === 0"
-            :loading="submitting"
-            @click="handleSubmit"
-          >
-            <template #icon><icon-play-arrow /></template>
-            开始执行 ({{ selectedCases.length }} 个用例)
-          </a-button>
-        </a-form-item>
-      </a-form>
+    <!-- 执行按钮 -->
+    <a-card :bordered="false" style="margin-top: 16px">
+      <a-button
+        type="primary"
+        size="large"
+        :disabled="selectedCases.length === 0"
+        :loading="submitting"
+        @click="handleSubmit"
+      >
+        <template #icon><icon-play-arrow /></template>
+        开始执行 ({{ selectedCases.length }} 个用例)
+      </a-button>
     </a-card>
-
-    <!-- 用例选择弹窗 -->
-    <a-modal
-      v-model:visible="showCaseSelector"
-      title="选择用例"
-      :width="800"
-      :footer="false"
-    >
-      <div class="case-selector-modal">
-        <!-- 项目选择 -->
-        <div class="project-filter">
-          <a-select
-            v-model="selectorProjectId"
-            placeholder="选择项目"
-            style="width: 200px"
-            @change="loadCasesForSelector"
-          >
-            <a-option v-for="p in projects" :key="p.id" :value="p.id">
-              {{ p.name }}
-            </a-option>
-          </a-select>
-        </div>
-
-        <!-- 用例列表 -->
-        <a-table
-          v-model:selectedKeys="selectorSelectedKeys"
-          :data="selectorCases"
-          :loading="selectorLoading"
-          :pagination="false"
-          :row-selection="{ type: 'checkbox' }"
-          row-key="id"
-          :scroll="{ y: 400 }"
-        >
-          <template #columns>
-            <a-table-column title="用例名称" data-index="name" />
-            <a-table-column title="步骤数" :width="100">
-              <template #cell="{ record }">
-                {{ record.steps?.length || 0 }} 步
-              </template>
-            </a-table-column>
-          </template>
-        </a-table>
-
-        <!-- 确认按钮 -->
-        <div class="selector-footer">
-          <a-button @click="showCaseSelector = false">取消</a-button>
-          <a-button type="primary" @click="confirmCaseSelection">
-            确认选择 ({{ selectorSelectedKeys.length }})
-          </a-button>
-        </div>
-      </div>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconPlayArrow } from '@arco-design/web-vue/es/icon'
-import { getUICaseList, type UICase } from '@/api/uiCase'
+import { IconPlayArrow, IconSearch, IconRefresh } from '@arco-design/web-vue/es/icon'
+import { getUICaseList, getUICaseModules, type UICase } from '@/api/uiCase'
 import { getProjects, type Project } from '@/api/project'
 import { getEnvironments } from '@/api/environment'
 import type { Environment } from '@/api/apiTestCase'
 import { createUIBatchRun } from '@/api/uiBatchRun'
+import UISelectedCaseList from './components/UISelectedCaseList.vue'
 
 const router = useRouter()
 
@@ -163,13 +186,24 @@ const projects = ref<Project[]>([])
 const environments = ref<Environment[]>([])
 const envLoading = ref(false)
 
-// 用例选择
-const selectedCases = ref<UICase[]>([])
-const showCaseSelector = ref(false)
+// 用例列表
+const caseList = ref<UICase[]>([])
+const caseLoading = ref(false)
+const selectedCaseIds = ref<number[]>([])
+
+// 已选用例（保持顺序）
+const selectedCases = computed(() => {
+  return selectedCaseIds.value
+    .map(id => caseList.value.find(c => c.id === id))
+    .filter(Boolean) as UICase[]
+})
+
+// 筛选条件
 const selectorProjectId = ref<number | null>(null)
-const selectorCases = ref<UICase[]>([])
-const selectorLoading = ref(false)
-const selectorSelectedKeys = ref<number[]>([])
+const selectorKeyword = ref('')
+const selectorPriority = ref<string | undefined>(undefined)
+const selectorModule = ref<string | undefined>(undefined)
+const moduleOptions = ref<{ label: string; value: string }[]>([])
 
 // 表单
 const form = reactive({
@@ -182,30 +216,87 @@ const form = reactive({
 // 提交状态
 const submitting = ref(false)
 
+// 优先级颜色
+function getPriorityColor(priority: string): string {
+  const colors: Record<string, string> = { P0: 'red', P1: 'orange', P2: 'blue', P3: 'green' }
+  return colors[priority] || 'blue'
+}
+
 // 加载项目列表
 async function loadProjects() {
   try {
     projects.value = await getProjects()
     if (projects.value.length > 0) {
       selectorProjectId.value = projects.value[0].id
-      loadCasesForSelector()
+      loadCases()
+      loadModules()
     }
   } catch (e) {
     console.error('加载项目列表失败:', e)
   }
 }
 
-// 加载用例列表（选择器用）
-async function loadCasesForSelector() {
+// 加载模块列表
+async function loadModules() {
   if (!selectorProjectId.value) return
-  selectorLoading.value = true
   try {
-    const res = await getUICaseList(selectorProjectId.value, 0, 1000)
-    selectorCases.value = (res as any) || []
+    const res = await getUICaseModules(selectorProjectId.value)
+    moduleOptions.value = flattenModuleTree(res || [])
+  } catch (e) {
+    console.error('加载模块列表失败:', e)
+  }
+}
+
+// 展平模块树为下拉选项
+function flattenModuleTree(tree: any[]): { label: string; value: string }[] {
+  const result: { label: string; value: string }[] = []
+  function walk(nodes: any[], prefix = '') {
+    for (const node of nodes) {
+      const fullPath = prefix ? `${prefix}/${node.label}` : node.label
+      result.push({ label: fullPath, value: node.value || fullPath })
+      if (node.children?.length) {
+        walk(node.children, fullPath)
+      }
+    }
+  }
+  walk(tree)
+  return result
+}
+
+// 项目切换
+function onProjectChange() {
+  selectorKeyword.value = ''
+  selectorPriority.value = undefined
+  selectorModule.value = undefined
+  selectedCaseIds.value = []
+  loadCases()
+  loadModules()
+  loadEnvironments()
+}
+
+// 重置筛选
+function resetFilters() {
+  selectorKeyword.value = ''
+  selectorPriority.value = undefined
+  selectorModule.value = undefined
+  loadCases()
+}
+
+// 加载用例列表
+async function loadCases() {
+  if (!selectorProjectId.value) return
+  caseLoading.value = true
+  try {
+    const filters: Record<string, string> = {}
+    if (selectorKeyword.value) filters.keyword = selectorKeyword.value
+    if (selectorPriority.value) filters.priority = selectorPriority.value
+    if (selectorModule.value) filters.module = selectorModule.value
+    const res = await getUICaseList(selectorProjectId.value, 0, 1000, filters)
+    caseList.value = (res as any) || []
   } catch (e) {
     console.error('加载用例列表失败:', e)
   } finally {
-    selectorLoading.value = false
+    caseLoading.value = false
   }
 }
 
@@ -223,18 +314,17 @@ async function loadEnvironments() {
   }
 }
 
-// 确认选择
-function confirmCaseSelection() {
-  const selected = selectorCases.value.filter(c => selectorSelectedKeys.value.includes(c.id))
-  selectedCases.value = selected
-  showCaseSelector.value = false
-  // 加载环境
-  loadEnvironments()
-}
-
 // 移除用例
 function removeCase(caseId: number) {
-  selectedCases.value = selectedCases.value.filter(c => c.id !== caseId)
+  selectedCaseIds.value = selectedCaseIds.value.filter(id => id !== caseId)
+}
+
+// 重排序用例
+function reorderCases(orderedIds: number[]) {
+  // 保留不在当前表格中的已选用例
+  const inTable = new Set(caseList.value.map(c => c.id))
+  const keepOutside = selectedCaseIds.value.filter(id => !inTable.has(id))
+  selectedCaseIds.value = [...keepOutside, ...orderedIds]
 }
 
 // 提交
@@ -292,37 +382,7 @@ onMounted(() => {
   margin: 0;
 }
 
-.config-card {
-  max-width: 800px;
-}
-
-.case-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.selected-cases {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.case-selector-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.project-filter {
-  display: flex;
-  gap: 12px;
-}
-
-.selector-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 16px;
+.text-gray {
+  color: var(--color-text-4);
 }
 </style>

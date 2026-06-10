@@ -33,8 +33,11 @@ export interface UIStep {
 export interface UICase {
   id: number
   project_id: number
+  case_number?: string
+  module?: string
   name: string
   description?: string
+  priority: string  // P0/P1/P2/P3
   steps: UIStep[]
   locators: Record<string, unknown>
   assertions: Record<string, unknown>[]
@@ -73,9 +76,18 @@ export interface RecordingStopParams {
 /**
  * 获取 UI 用例列表
  */
-export function getUICaseList(projectId: number, skip = 0, limit = 100) {
+export function getUICaseList(projectId: number, skip = 0, limit = 100, filters?: { keyword?: string; priority?: string; module?: string }) {
   return request.get<UICase[]>('/ui-cases/', {
-    params: { project_id: projectId, skip, limit }
+    params: { project_id: projectId, skip, limit, ...filters }
+  })
+}
+
+/**
+ * 获取 UI 用例模块树
+ */
+export function getUICaseModules(projectId: number) {
+  return request.get<any[]>('/ui-cases/modules/tree', {
+    params: { project_id: projectId }
   })
 }
 

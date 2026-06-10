@@ -86,7 +86,7 @@
             <a-menu-item key="ui-cases">用例管理</a-menu-item>
             <a-menu-item key="ui-record">录制用例</a-menu-item>
             <a-menu-item key="ui-run">任务配置</a-menu-item>
-            <a-menu-item key="ui-batch-tasks">批量任务</a-menu-item>
+            <a-menu-item key="ui-batch-tasks">任务记录</a-menu-item>
           </a-sub-menu>
 
           <a-sub-menu key="api-test">
@@ -147,6 +147,7 @@ const collapsed = ref(false)
 const childRouteMap: Record<string, string> = {
   'api-batch-task-detail': 'api-batch-tasks',
   'api-test-debug': 'api-debug',
+  'ui-batch-run-detail': 'ui-batch-tasks',
 }
 
 const activeMenuKey = computed(() => {

@@ -13,6 +13,8 @@ class UIStepBase(BaseModel):
 class UICaseBase(BaseModel):
     name: str
     description: Optional[str] = None
+    module: Optional[str] = None  # 所属模块
+    priority: str = "P2"  # 优先级: P0/P1/P2/P3
     steps: list[dict] = []
     locators: dict = {}
     assertions: list[dict] = []
@@ -27,6 +29,8 @@ class UICaseCreate(UICaseBase):
 class UICaseUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    module: Optional[str] = None
+    priority: Optional[str] = None
     steps: Optional[list[dict]] = None
     locators: Optional[dict] = None
     assertions: Optional[list[dict]] = None
@@ -37,6 +41,7 @@ class UICaseUpdate(BaseModel):
 class UICaseInDB(UICaseBase):
     id: int
     project_id: int
+    case_number: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -126,7 +126,7 @@
           <div class="rate-body">
             <div class="rate-chart-wrap">
               <div ref="passRateChartRef" class="rate-chart"></div>
-              <div class="rate-val">
+              <div class="rate-center">
                 <span class="rate-num">{{ passRate.pass_rate }}</span>
                 <span class="rate-pct">%</span>
               </div>
@@ -137,9 +137,10 @@
                   <span class="rbi-dot" :style="{ background: r.color }"></span>
                   <span class="rbi-label">{{ r.label }}</span>
                   <span class="rbi-val">{{ r.value }}</span>
+                  <span class="rbi-pct">{{ r.pct }}%</span>
                 </div>
                 <div class="rbi-track">
-                  <div class="rbi-fill" :style="{ width: r.pct + '%', background: r.color }"></div>
+                  <div class="rbi-fill" :style="{ width: r.pct + '%', background: `linear-gradient(90deg, ${r.color}, ${r.colorLight})` }"></div>
                 </div>
               </div>
             </div>
@@ -153,8 +154,11 @@
             <div ref="distributionChartRef" class="dist-chart"></div>
             <div class="dist-legend">
               <div v-for="(item, i) in distributionData" :key="item.name" class="dl-item">
-                <span class="dl-dot" :class="i === 0 ? 'dl-purple' : 'dl-blue'"></span>
-                <span class="dl-name">{{ item.name }}</span>
+                <div class="dl-color" :style="{ background: distColors[i] || '#94a3b8' }"></div>
+                <div class="dl-info">
+                  <span class="dl-name">{{ item.name }}</span>
+                  <span class="dl-pct">{{ distributionTotal > 0 ? Math.round(item.value / distributionTotal * 100) : 0 }}%</span>
+                </div>
                 <span class="dl-val">{{ item.value }}</span>
               </div>
             </div>
@@ -215,10 +219,16 @@ const distributionData = ref<CaseDistribution[]>([])
 const rateItems = computed(() => {
   const t = passRate.total || 1
   return [
-    { label: '通过', value: passRate.pass, pct: (passRate.pass / t * 100).toFixed(0), color: '#10b981' },
-    { label: '失败', value: passRate.fail, pct: (passRate.fail / t * 100).toFixed(0), color: '#f43f5e' },
-    { label: '错误', value: passRate.error, pct: (passRate.error / t * 100).toFixed(0), color: '#f59e0b' },
+    { label: '通过', value: passRate.pass, pct: (passRate.pass / t * 100).toFixed(0), color: '#10b981', colorLight: '#6ee7b7' },
+    { label: '失败', value: passRate.fail, pct: (passRate.fail / t * 100).toFixed(0), color: '#f43f5e', colorLight: '#fda4af' },
+    { label: '错误', value: passRate.error, pct: (passRate.error / t * 100).toFixed(0), color: '#f59e0b', colorLight: '#fcd34d' },
   ]
+})
+
+const distColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#ec4899']
+
+const distributionTotal = computed(() => {
+  return distributionData.value.reduce((sum, item) => sum + item.value, 0)
 })
 
 const shortcuts = [
@@ -280,40 +290,65 @@ function renderTrend() {
 
 function renderRate() {
   if (!passRateChartRef.value) return
-  if (!passRateChart) passRateChart = echarts.init(passRateChartRef.value)
+  if (passRateChart) passRateChart.dispose()
+  passRateChart = echarts.init(passRateChartRef.value)
   const total = passRate.pass + passRate.fail + passRate.error
   passRateChart.setOption({
     series: [{
-      type: 'pie', radius: ['75%', '92%'], center: ['50%', '50%'],
-      label: { show: false }, labelLine: { show: false },
+      type: 'pie',
+      radius: ['68%', '90%'],
+      center: ['50%', '50%'],
+      label: { show: false },
+      labelLine: { show: false },
       emphasis: { scale: false, disabled: true },
-      itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 3 },
+      itemStyle: {
+        borderRadius: 6,
+        borderColor: '#fff',
+        borderWidth: 2,
+      },
       data: [
-        { value: passRate.pass, itemStyle: { color: '#10b981' } },
-        { value: passRate.fail, itemStyle: { color: '#f43f5e' } },
-        { value: passRate.error, itemStyle: { color: '#f59e0b' } },
+        { value: passRate.pass, itemStyle: { color: '#059669' } },
+        { value: passRate.fail, itemStyle: { color: '#e11d48' } },
+        { value: passRate.error, itemStyle: { color: '#d97706' } },
         { value: total === 0 ? 1 : 0, itemStyle: { color: '#f9fafb' } },
       ],
     }],
     animationDuration: 1200,
+    animationEasing: 'cubicOut',
   })
 }
 
 function renderDist() {
   if (!distributionChartRef.value) return
-  if (!distributionChart) distributionChart = echarts.init(distributionChartRef.value)
+  if (distributionChart) distributionChart.dispose()
+  distributionChart = echarts.init(distributionChartRef.value)
+  const colors = [
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#8b5cf6' }, { offset: 1, color: '#a78bfa' }] },
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#3b82f6' }, { offset: 1, color: '#93c5fd' }] },
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#6ee7b7' }] },
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#fcd34d' }] },
+  ]
   distributionChart.setOption({
     series: [{
-      type: 'pie', radius: ['50%', '78%'], center: ['50%', '50%'],
-      label: { show: false }, labelLine: { show: false },
-      emphasis: { scale: false, disabled: true },
-      itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 3 },
+      type: 'pie',
+      radius: ['45%', '80%'],
+      center: ['50%', '50%'],
+      padAngle: 3,
+      label: { show: false },
+      labelLine: { show: false },
+      emphasis: { scale: true, scaleSize: 6 },
+      itemStyle: {
+        borderRadius: 8,
+        borderColor: '#fff',
+        borderWidth: 3,
+      },
       data: distributionData.value.map((item, i) => ({
         ...item,
-        itemStyle: { color: i === 0 ? '#8b5cf6' : '#3b82f6' },
+        itemStyle: { color: colors[i] || colors[0] },
       })),
     }],
     animationDuration: 800,
+    animationEasing: 'cubicOut',
   })
 }
 
@@ -430,30 +465,42 @@ onUnmounted(() => {
 
 /* ---- 通过率 ---- */
 .rate-body { display: flex; align-items: center; gap: 32px; }
-.rate-chart-wrap { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+.rate-chart-wrap { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
 .rate-chart { width: 100%; height: 100%; }
-.rate-val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.rate-num { font-size: 36px; font-weight: 700; color: #111827; }
-.rate-pct { font-size: 16px; color: #9ca3af; margin-top: 4px; }
+.rate-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(255,255,255,0.9) 60%, transparent 100%);
+  border-radius: 50%;
+}
+.rate-num { font-size: 38px; font-weight: 800; color: #111827; line-height: 1; }
+.rate-pct { font-size: 14px; color: #9ca3af; margin-top: 2px; font-weight: 500; }
 .rate-bars { flex: 1; display: flex; flex-direction: column; gap: 16px; }
-.rate-bar-item {}
-.rbi-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.rbi-dot { width: 8px; height: 8px; border-radius: 50%; }
-.rbi-label { font-size: 12px; color: #6b7280; flex: 1; }
-.rbi-val { font-size: 14px; font-weight: 600; color: #111827; }
-.rbi-track { height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
-.rbi-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+.rate-bar-item { transition: all 0.2s; }
+.rate-bar-item:hover { transform: translateX(4px); }
+.rbi-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rbi-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
+.rbi-label { font-size: 13px; color: #6b7280; flex: 1; font-weight: 500; }
+.rbi-val { font-size: 14px; font-weight: 700; color: #111827; min-width: 32px; text-align: right; }
+.rbi-pct { font-size: 11px; color: #9ca3af; min-width: 36px; text-align: right; }
+.rbi-track { height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+.rbi-fill { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
 
 /* ---- 用例分布 ---- */
-.dist-body { display: flex; align-items: center; gap: 24px; }
-.dist-chart { width: 120px; height: 120px; flex-shrink: 0; }
-.dist-legend { display: flex; flex-direction: column; gap: 14px; }
-.dl-item { display: flex; align-items: center; gap: 10px; }
-.dl-dot { width: 10px; height: 10px; border-radius: 4px; }
-.dl-purple { background: #8b5cf6; }
-.dl-blue { background: #3b82f6; }
-.dl-name { font-size: 12px; color: #6b7280; min-width: 56px; }
-.dl-val { font-size: 15px; font-weight: 600; color: #111827; }
+.dist-body { display: flex; align-items: center; gap: 28px; }
+.dist-chart { width: 140px; height: 140px; flex-shrink: 0; }
+.dist-legend { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.dl-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: #f9fafb; border-radius: 12px;
+  transition: all 0.2s;
+}
+.dl-item:hover { background: #f3f4f6; transform: translateX(4px); }
+.dl-color { width: 4px; height: 32px; border-radius: 2px; flex-shrink: 0; }
+.dl-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.dl-name { font-size: 13px; color: #6b7280; font-weight: 500; }
+.dl-pct { font-size: 11px; color: #9ca3af; }
+.dl-val { font-size: 18px; font-weight: 700; color: #111827; }
 
 /* ---- 快捷入口 ---- */
 .shortcuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

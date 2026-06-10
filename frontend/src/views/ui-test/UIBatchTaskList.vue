@@ -1,310 +1,439 @@
 <template>
   <div class="ui-batch-task-list">
-    <div class="page-header">
-      <h2 class="page-title">UI 执行任务</h2>
-      <p class="page-desc">查看 UI 自动化批量执行任务记录</p>
-    </div>
-
-    <!-- 状态筛选 -->
-    <div class="filter-bar">
-      <a-space>
-        <a-button
-          v-for="item in statusOptions"
-          :key="item.value"
-          :type="statusFilter === item.value ? 'primary' : 'outline'"
-          size="small"
-          @click="statusFilter = item.value"
+    <!-- 搜索栏 -->
+    <a-card :bordered="false" style="margin-bottom: 16px">
+      <a-space wrap>
+        <a-select
+          v-model="searchForm.status"
+          placeholder="任务状态"
+          style="width: 160px"
+          allow-clear
         >
-          {{ item.label }}
+          <a-option value="pending">待执行</a-option>
+          <a-option value="running">执行中</a-option>
+          <a-option value="done">已完成</a-option>
+          <a-option value="error">异常</a-option>
+          <a-option value="cancelled">已取消</a-option>
+        </a-select>
+        <a-button type="primary" @click="handleSearch">
+          <template #icon><icon-search /></template>
+          搜索
+        </a-button>
+        <a-button @click="handleReset">
+          <template #icon><icon-refresh /></template>
+          重置
+        </a-button>
+        <a-button
+          v-if="allSelectedKeys.length > 0"
+          type="primary"
+          status="danger"
+          @click="handleBatchDelete"
+        >
+          <template #icon><icon-delete /></template>
+          批量删除 ({{ allSelectedKeys.length }})
         </a-button>
       </a-space>
-    </div>
+    </a-card>
 
-    <!-- 任务列表 -->
-    <div class="task-list">
-      <div
-        v-for="task in tasks"
-        :key="task.id"
-        class="task-card"
-        @click="goToDetail(task.id)"
-      >
-        <div class="task-header">
-          <div class="task-name">{{ task.name }}</div>
-          <a-tag :color="getStatusColor(task.status)" size="small">
-            {{ getStatusLabel(task.status) }}
-          </a-tag>
-        </div>
+    <!-- 任务列表（按日期分组） -->
+    <a-card :bordered="false">
+      <a-spin :loading="loading">
+        <a-empty v-if="!loading && groupedData.length === 0" description="暂无任务记录" />
 
-        <div class="task-progress">
-          <a-progress
-            :percent="getProgress(task)"
-            :status="getProgressStatus(task)"
-            :show-text="false"
-            :stroke-width="4"
-          />
-        </div>
+        <a-collapse
+          v-else
+          v-model:active-key="activeKeys"
+          :bordered="false"
+          expand-icon-position="left"
+        >
+          <a-collapse-item
+            v-for="group in groupedData"
+            :key="group.key"
+            :disabled="group.items.length === 0"
+          >
+            <template #header>
+              <div class="group-header">
+                <span class="group-label">{{ group.label }}</span>
+                <a-tag size="small" color="arcoblue">{{ group.items.length }} 条</a-tag>
+                <a-checkbox
+                  v-if="group.items.length > 0"
+                  :model-value="isGroupSelected(group.key)"
+                  :indeterminate="isGroupIndeterminate(group.key)"
+                  @click.stop
+                  @change="(checked: boolean) => toggleGroupSelection(group.key, checked)"
+                >
+                  全选
+                </a-checkbox>
+              </div>
+            </template>
 
-        <div class="task-stats">
-          <span class="stat-item">
-            <span class="stat-label">通过</span>
-            <span class="stat-value stat-pass">{{ task.pass_count }}</span>
-          </span>
-          <span class="stat-item">
-            <span class="stat-label">失败</span>
-            <span class="stat-value stat-fail">{{ task.fail_count }}</span>
-          </span>
-          <span class="stat-item">
-            <span class="stat-label">错误</span>
-            <span class="stat-value stat-error">{{ task.error_count }}</span>
-          </span>
-          <span class="stat-item" v-if="task.duration">
-            <span class="stat-label">耗时</span>
-            <span class="stat-value">{{ formatDuration(task.duration) }}</span>
-          </span>
-        </div>
+            <a-table
+              v-if="group.items.length > 0"
+              :columns="columns"
+              :data="group.items"
+              :pagination="false"
+              row-key="id"
+              size="small"
+            >
+              <template #checkbox="{ record }">
+                <a-checkbox
+                  :model-value="(selectedKeysMap[group.key] || []).includes(record.id)"
+                  @change="(checked: boolean) => toggleRowSelection(group.key, record.id, checked)"
+                />
+              </template>
 
-        <div class="task-time">
-          {{ task.created_at }}
-        </div>
-      </div>
+              <template #status="{ record }">
+                <a-tag :color="getStatusColor(record.status)" class="status-tag">
+                  <template #icon>
+                    <icon-loading v-if="record.status === 'running'" spin />
+                  </template>
+                  {{ getStatusText(record.status) }}
+                </a-tag>
+              </template>
 
-      <div v-if="tasks.length === 0" class="empty-state">
-        <icon-empty />
-        <span>暂无执行记录</span>
-      </div>
-    </div>
+              <template #progress="{ record }">
+                <a-progress
+                  :percent="getProgress(record)"
+                  :status="getProgressStatus(record)"
+                  size="small"
+                  :show-text="false"
+                  style="width: 120px"
+                />
+                <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3)">
+                  {{ Math.round(getProgress(record) * 100) }}%
+                </span>
+              </template>
 
-    <!-- 分页 -->
-    <div class="pagination-wrapper" v-if="total > 0">
-      <a-pagination
-        v-model:current="page"
-        :page-size="pageSize"
-        :total="total"
-        show-total
-        @change="loadTasks"
-      />
-    </div>
+              <template #stats="{ record }">
+                <a-space>
+                  <span class="stat-pass">{{ record.pass_count }}</span>
+                  <span class="stat-fail">{{ record.fail_count }}</span>
+                  <span class="stat-error">{{ record.error_count }}</span>
+                </a-space>
+              </template>
+
+              <template #duration="{ record }">
+                {{ record.duration ? formatDuration(record.duration) : '-' }}
+              </template>
+
+              <template #created_at="{ record }">
+                {{ formatTime(record.created_at) }}
+              </template>
+
+              <template #actions="{ record }">
+                <a-space>
+                  <a-button type="text" size="small" @click="handleViewDetail(record)">
+                    详情
+                  </a-button>
+                  <a-button
+                    v-if="record.status === 'running' || record.status === 'pending'"
+                    type="text"
+                    size="small"
+                    status="warning"
+                    @click="handleCancel(record)"
+                  >
+                    取消
+                  </a-button>
+                  <a-popconfirm
+                    v-if="record.status !== 'running'"
+                    content="确定要删除该任务吗？"
+                    @ok="handleDelete(record)"
+                  >
+                    <a-button type="text" size="small" status="danger">
+                      删除
+                    </a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+            </a-table>
+          </a-collapse-item>
+        </a-collapse>
+      </a-spin>
+    </a-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { IconEmpty } from '@arco-design/web-vue/es/icon'
-import { getUIBatchRuns, type UIBatchRun } from '@/api/uiBatchRun'
+import { Message, Modal } from '@arco-design/web-vue'
+import { getUIBatchRuns, deleteUIBatchRun, cancelUIBatchRun } from '@/api/uiBatchRun'
+import type { UIBatchRun } from '@/api/uiBatchRun'
 
 const router = useRouter()
-
-// 任务列表
-const tasks = ref<UIBatchRun[]>([])
 const loading = ref(false)
+const tableData = ref<UIBatchRun[]>([])
 
-// 分页
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
+// 按分组存储选中的任务 ID
+const selectedKeysMap = reactive<Record<string, number[]>>({})
 
-// 筛选
-const statusFilter = ref('')
-const statusOptions = [
-  { label: '全部', value: '' },
-  { label: '待执行', value: 'pending' },
-  { label: '执行中', value: 'running' },
-  { label: '已完成', value: 'done' },
-  { label: '异常', value: 'error' },
+// 所有选中 ID
+const allSelectedKeys = computed(() => {
+  const ids: number[] = []
+  for (const keys of Object.values(selectedKeysMap)) {
+    ids.push(...keys)
+  }
+  return [...new Set(ids)]
+})
+
+// 展开的分组
+const activeKeys = ref<string[]>(['today', 'yesterday', 'before_yesterday'])
+
+const searchForm = reactive({
+  status: ''
+})
+
+const columns = [
+  { title: '', slotName: 'checkbox', width: 50 },
+  { title: 'ID', dataIndex: 'id', width: 80 },
+  { title: '任务名称', dataIndex: 'name', width: 220, ellipsis: true },
+  { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
+  { title: '进度', dataIndex: 'progress', slotName: 'progress', width: 200 },
+  { title: '结果', slotName: 'stats', width: 120 },
+  { title: '耗时', slotName: 'duration', width: 100 },
+  { title: '创建时间', slotName: 'created_at', width: 160 },
+  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' as const }
 ]
 
-// 加载任务列表
-async function loadTasks() {
+// 日期分组
+interface DateGroup {
+  key: string
+  label: string
+  daysAgo: [number, number]
+}
+
+const dateGroups: DateGroup[] = [
+  { key: 'today', label: '今天', daysAgo: [0, 0] },
+  { key: 'yesterday', label: '昨天', daysAgo: [1, 1] },
+  { key: 'before_yesterday', label: '前天', daysAgo: [2, 2] },
+  { key: '3_days_ago', label: '3天前', daysAgo: [3, 3] },
+  { key: '7_days_ago', label: '4-7天前', daysAgo: [4, 7] },
+  { key: 'older', label: '更早', daysAgo: [8, 999] }
+]
+
+const groupedData = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const groups = dateGroups.map(group => ({
+    ...group,
+    items: [] as UIBatchRun[]
+  }))
+
+  tableData.value.forEach(item => {
+    const createdDate = new Date(item.created_at)
+    createdDate.setHours(0, 0, 0, 0)
+    const diffTime = today.getTime() - createdDate.getTime()
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const group = groups.find(g => diffDays >= g.daysAgo[0] && diffDays <= g.daysAgo[1])
+    if (group) {
+      group.items.push(item)
+    } else {
+      groups[groups.length - 1].items.push(item)
+    }
+  })
+
+  const result = groups.filter(g => g.items.length > 0)
+
+  for (const g of result) {
+    if (!(g.key in selectedKeysMap)) {
+      selectedKeysMap[g.key] = []
+    }
+  }
+
+  return result
+})
+
+function getProgress(task: UIBatchRun): number {
+  if (!task.total_count) return 0
+  return (task.pass_count + task.fail_count + task.error_count) / task.total_count
+}
+
+function getProgressStatus(task: UIBatchRun): 'danger' | 'warning' | 'success' | 'normal' {
+  if (task.status === 'error') return 'danger'
+  if (task.status === 'cancelled') return 'warning'
+  if (task.status === 'done') {
+    return task.fail_count > 0 || task.error_count > 0 ? 'warning' : 'success'
+  }
+  return 'normal'
+}
+
+const isGroupSelected = (groupKey: string) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group || group.items.length === 0) return false
+  const selected = selectedKeysMap[groupKey] || []
+  return group.items.every(item => selected.includes(item.id))
+}
+
+const isGroupIndeterminate = (groupKey: string) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group || group.items.length === 0) return false
+  const selected = selectedKeysMap[groupKey] || []
+  const selectedCount = group.items.filter(item => selected.includes(item.id)).length
+  return selectedCount > 0 && selectedCount < group.items.length
+}
+
+const toggleRowSelection = (groupKey: string, id: number, checked: boolean) => {
+  if (!selectedKeysMap[groupKey]) selectedKeysMap[groupKey] = []
+  const arr = selectedKeysMap[groupKey]
+  const idx = arr.indexOf(id)
+  if (checked && idx === -1) arr.push(id)
+  else if (!checked && idx !== -1) arr.splice(idx, 1)
+}
+
+const toggleGroupSelection = (groupKey: string, checked: boolean) => {
+  const group = groupedData.value.find(g => g.key === groupKey)
+  if (!group) return
+  selectedKeysMap[groupKey] = checked ? group.items.map(item => item.id) : []
+}
+
+const handleBatchDelete = async () => {
+  const ids = allSelectedKeys.value
+  if (ids.length === 0) return
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除选中的 ${ids.length} 条任务记录吗？`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      try {
+        await Promise.all(ids.map(id => deleteUIBatchRun(id)))
+        Message.success(`成功删除 ${ids.length} 条记录`)
+        for (const key of Object.keys(selectedKeysMap)) selectedKeysMap[key] = []
+        loadData()
+      } catch (e: any) {
+        Message.error(e?.message || '批量删除失败')
+      }
+    }
+  })
+}
+
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = { pending: 'gray', running: 'blue', done: 'green', error: 'red', cancelled: 'orange' }
+  return colors[status] || 'gray'
+}
+
+const getStatusText = (status: string) => {
+  const texts: Record<string, string> = { pending: '待执行', running: '执行中', done: '已完成', error: '异常', cancelled: '已取消' }
+  return texts[status] || status
+}
+
+const formatDuration = (ms: number) => {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const min = Math.floor(ms / 60000)
+  const sec = ((ms % 60000) / 1000).toFixed(0)
+  return `${min}m ${sec}s`
+}
+
+const formatTime = (time: string) => new Date(time).toLocaleString('zh-CN')
+
+const loadData = async () => {
   loading.value = true
   try {
     const res = await getUIBatchRuns({
-      page: page.value,
-      page_size: pageSize.value,
-      status: statusFilter.value || undefined,
+      page: 1,
+      page_size: 100,
+      status: searchForm.status || undefined,
     })
     const data = res as any
-    tasks.value = data?.items || []
-    total.value = data?.total || 0
+    tableData.value = data?.items || []
   } catch (e) {
-    console.error('加载任务列表失败:', e)
+    Message.error('加载任务列表失败')
   } finally {
     loading.value = false
   }
 }
 
-// 跳转详情
-function goToDetail(taskId: number) {
-  router.push({ name: 'ui-batch-run-detail', params: { runId: taskId } })
+const handleSearch = () => {
+  for (const key of Object.keys(selectedKeysMap)) selectedKeysMap[key] = []
+  loadData()
 }
 
-// 获取进度
-function getProgress(task: UIBatchRun): number {
-  if (task.total_count === 0) return 0
-  const completed = task.pass_count + task.fail_count + task.error_count
-  return completed / task.total_count
+const handleReset = () => {
+  searchForm.status = ''
+  handleSearch()
 }
 
-// 获取进度状态
-function getProgressStatus(task: UIBatchRun): 'danger' | 'warning' | 'success' | 'normal' {
-  if (task.status === 'error') return 'danger'
-  if (task.fail_count > 0 || task.error_count > 0) return 'warning'
-  if (task.status === 'done') return 'success'
-  return 'normal'
+const handleViewDetail = (record: UIBatchRun) => {
+  router.push({ name: 'ui-batch-run-detail', params: { runId: record.id } })
 }
 
-// 获取状态颜色
-function getStatusColor(status: string): string {
-  const map: Record<string, string> = {
-    pending: 'gray',
-    running: 'blue',
-    done: 'green',
-    error: 'red',
-    cancelled: 'orange',
+const handleCancel = async (record: UIBatchRun) => {
+  try {
+    await cancelUIBatchRun(record.id)
+    Message.success('取消请求已提交')
+    loadData()
+  } catch (e: any) {
+    Message.error(e?.message || '取消失败')
   }
-  return map[status] || 'gray'
 }
 
-// 获取状态标签
-function getStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    pending: '待执行',
-    running: '执行中',
-    done: '已完成',
-    error: '异常',
-    cancelled: '已取消',
+const handleDelete = async (record: UIBatchRun) => {
+  try {
+    await deleteUIBatchRun(record.id)
+    Message.success('删除成功')
+    loadData()
+  } catch (e: any) {
+    Message.error(e?.message || '删除失败')
   }
-  return map[status] || '未知'
 }
-
-// 格式化时长
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`
-}
-
-// 监听筛选变化
-watch(statusFilter, () => {
-  page.value = 1
-  loadTasks()
-})
 
 onMounted(() => {
-  loadTasks()
+  loadData()
 })
 </script>
 
 <style scoped>
 .ui-batch-task-list {
+  height: 100%;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
 }
 
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
+.group-label {
   font-weight: 600;
-  color: var(--color-text-1);
-  margin: 0 0 4px 0;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--color-text-3);
-  margin: 0;
-}
-
-.filter-bar {
-  margin-bottom: 16px;
-}
-
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.task-card {
-  background: white;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  padding: 16px 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.task-card:hover {
-  border-color: var(--color-primary-light-4);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.task-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.task-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-
-.task-progress {
-  margin-bottom: 12px;
-}
-
-.task-stats {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 8px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.stat-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-1);
-}
-
-.stat-pass { color: #00b42a; }
-.stat-fail { color: #f53f3f; }
-.stat-error { color: #ff7d00; }
-
-.task-time {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 60px 0;
-  color: var(--color-text-3);
   font-size: 14px;
 }
 
-.pagination-wrapper {
-  display: flex;
+.status-tag {
+  display: inline-flex !important;
+  align-items: center;
   justify-content: center;
-  margin-top: 24px;
+}
+
+.status-tag :deep(.arco-tag-icon:empty) {
+  display: none;
+}
+
+.stat-pass {
+  color: #00b42a;
+  font-weight: 600;
+}
+.stat-pass::after {
+  content: ' ✓';
+  font-size: 10px;
+}
+.stat-fail {
+  color: #f53f3f;
+  font-weight: 600;
+}
+.stat-fail::after {
+  content: ' ✗';
+  font-size: 10px;
+}
+.stat-error {
+  color: #ff7d00;
+  font-weight: 600;
+}
+.stat-error::after {
+  content: ' !';
+  font-size: 10px;
 }
 </style>

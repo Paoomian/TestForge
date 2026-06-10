@@ -9,8 +9,11 @@ class UICase(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    case_number = Column(String(50))  # 用例编号
+    module = Column(String(200))  # 所属模块（树形路径，如"用户管理/登录"）
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
+    priority = Column(String(10), default="P2")  # 优先级: P0/P1/P2/P3
     steps = Column(JSON, default=list)
     locators = Column(JSON, default=dict)
     assertions = Column(JSON, default=list)

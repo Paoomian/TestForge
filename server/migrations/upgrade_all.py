@@ -515,11 +515,15 @@ def ensure_innodb(conn):
 
 
 def ensure_ui_cases_extended(conn):
-    """扩展 ui_cases 表：添加录制相关字段"""
+    """扩展 ui_cases 表：添加录制相关字段和优先级/模块字段"""
     if not table_exists(conn, "ui_cases"):
         return
     safe_add_column(conn, "ui_cases", "base_url", "VARCHAR(500) DEFAULT NULL")
     safe_add_column(conn, "ui_cases", "browser_config", "JSON DEFAULT NULL")
+    # 新增：用例编号、模块、优先级
+    safe_add_column(conn, "ui_cases", "case_number", "VARCHAR(50) DEFAULT NULL")
+    safe_add_column(conn, "ui_cases", "module", "VARCHAR(200) DEFAULT NULL")
+    safe_add_column(conn, "ui_cases", "priority", "VARCHAR(10) DEFAULT 'P2'")
 
 
 def upgrade():

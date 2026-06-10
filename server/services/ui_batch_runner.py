@@ -153,7 +153,19 @@ class UIBatchRunner:
         return test_run and test_run.cancelled
 
     async def _execute_case(self, detail: TestRunDetail, is_last: bool = False) -> dict:
-        """执行单个用例"""
+        """执行单个用例（每个用例使用独立的上下文，彻底隔离 cookies/session）"""
+        # 关闭上一个用例的上下文（连同页面一起关闭）
+        try:
+            if self._context:
+                await self._context.close()
+        except Exception:
+            pass
+        # 创建新的上下文，cookies/session 完全隔离
+        self._context = await self._browser.new_context(
+            viewport={"width": self.viewport_width, "height": self.viewport_height}
+        )
+        self._page = await self._context.new_page()
+
         # 获取用例信息（UI用例的ID存储在case_number字段中）
         case_id = int(detail.case_number) if detail.case_number else detail.case_id
         logger.info(f"执行用例: case_id={case_id}, case_name={detail.case_name}")
@@ -248,13 +260,16 @@ class UIBatchRunner:
         try:
             if action == "navigate":
                 url = step.get("url", "")
+                # 修复双斜杠问题：base_url 末尾有 / 且步骤 URL 开头有 / 时会产生 //
+                url = url.replace("://", "\x00").replace("//", "/").replace("\x00", "://")
                 logger.info(f"导航到: {url}")
-                await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                await self._page.goto(url, wait_until="networkidle", timeout=30000)
                 message = f"导航到 {url}"
 
             elif action == "click":
                 selector = self._get_selector(step)
                 if selector:
+                    await self._page.wait_for_selector(selector, state="visible", timeout=10000)
                     await self._page.click(selector, timeout=10000)
                     message = f"点击 {selector}"
                 else:
@@ -264,6 +279,7 @@ class UIBatchRunner:
                 selector = self._get_selector(step)
                 value = step.get("value", "")
                 if selector:
+                    await self._page.wait_for_selector(selector, state="visible", timeout=10000)
                     await self._page.fill(selector, value, timeout=10000)
                     message = f"输入 {value}"
                 else:
@@ -291,6 +307,39 @@ class UIBatchRunner:
                 await self._page.go_back(wait_until="domcontentloaded")
                 message = "返回上一页"
 
+            elif action == "scroll":
+                delta_x = step.get("deltaX", 0)
+                delta_y = step.get("deltaY", 0)
+                await self._page.mouse.wheel(delta_x, delta_y)
+                await self._page.wait_for_timeout(500)
+                message = f"滚动 ({delta_x}, {delta_y})"
+
+            elif action == "drag":
+                from_point = step.get("from")
+                to_point = step.get("to")
+                if from_point and to_point:
+                    await self._page.mouse.move(from_point["x"], from_point["y"])
+                    await self._page.mouse.down()
+                    steps_count = 10
+                    for i in range(steps_count + 1):
+                        ratio = i / steps_count
+                        x = from_point["x"] + (to_point["x"] - from_point["x"]) * ratio
+                        y = from_point["y"] + (to_point["y"] - from_point["y"]) * ratio
+                        await self._page.mouse.move(x, y)
+                        await self._page.wait_for_timeout(20)
+                    await self._page.mouse.up()
+                    await self._page.wait_for_timeout(300)
+                    message = f"拖拽 ({from_point['x']},{from_point['y']}) → ({to_point['x']},{to_point['y']})"
+                else:
+                    raise Exception("缺少拖拽坐标")
+
+            elif action == "assert":
+                # 执行断言，失败时抛出异常
+                assert_result = await self._execute_assert(step)
+                if not assert_result["success"]:
+                    raise Exception(assert_result["message"])
+                message = assert_result["message"]
+
             else:
                 message = f"未知操作: {action}"
 
@@ -312,6 +361,103 @@ class UIBatchRunner:
                 "message": str(e),
                 "duration_ms": duration_ms,
             }
+
+    async def _execute_assert(self, step: dict) -> dict:
+        """执行断言（与 UIExecutor 保持一致）"""
+        assert_type = step.get("type")
+        selector = step.get("selector")
+        expected = step.get("expected", "").strip()
+        timeout = step.get("timeout", 5000)
+
+        result = {"success": False, "message": ""}
+
+        try:
+            if assert_type == "element_exists":
+                if selector:
+                    element = await self._page.wait_for_selector(selector, timeout=timeout)
+                    if element:
+                        result["success"] = True
+                        result["message"] = f"元素存在: {selector}"
+                    else:
+                        result["message"] = f"元素不存在: {selector}"
+
+            elif assert_type == "element_not_exists":
+                if selector:
+                    try:
+                        await self._page.wait_for_selector(selector, timeout=timeout)
+                        result["message"] = f"元素不应存在: {selector}"
+                    except Exception:
+                        result["success"] = True
+                        result["message"] = f"元素不存在: {selector}"
+
+            elif assert_type == "text_equals":
+                if selector:
+                    element = await self._page.wait_for_selector(selector, timeout=timeout)
+                    if element:
+                        actual = await element.text_content()
+                        if actual and actual.strip() == expected:
+                            result["success"] = True
+                            result["message"] = f"文本等于 '{expected}'"
+                        else:
+                            result["message"] = f"期望 '{expected}'，实际 '{actual}'"
+
+            elif assert_type == "text_contains":
+                if selector:
+                    element = await self._page.wait_for_selector(selector, timeout=timeout)
+                    if element:
+                        actual = await element.text_content()
+                        if actual and expected in actual:
+                            result["success"] = True
+                            result["message"] = f"文本包含 '{expected}'"
+                        else:
+                            result["message"] = f"期望包含 '{expected}'，实际 '{actual}'"
+
+            elif assert_type == "value_equals":
+                if selector:
+                    element = await self._page.wait_for_selector(selector, timeout=timeout)
+                    if element:
+                        actual = await element.input_value()
+                        if actual == expected:
+                            result["success"] = True
+                            result["message"] = f"值等于 '{expected}'"
+                        else:
+                            result["message"] = f"期望 '{expected}'，实际 '{actual}'"
+
+            elif assert_type == "url_contains":
+                current_url = self._page.url
+                if expected in current_url:
+                    result["success"] = True
+                    result["message"] = f"URL 包含 '{expected}'"
+                else:
+                    result["message"] = f"URL 期望包含 '{expected}'，实际 '{current_url}'"
+
+            elif assert_type == "title_contains":
+                title = await self._page.title()
+                if expected in title:
+                    result["success"] = True
+                    result["message"] = f"标题包含 '{expected}'"
+                else:
+                    result["message"] = f"标题期望包含 '{expected}'，实际 '{title}'"
+
+            elif assert_type == "attribute_equals":
+                if selector:
+                    element = await self._page.wait_for_selector(selector, timeout=timeout)
+                    if element:
+                        attr_name = step.get("attributeName", "")
+                        actual = await element.get_attribute(attr_name)
+                        if actual == expected:
+                            result["success"] = True
+                            result["message"] = f"属性 {attr_name} 等于 '{expected}'"
+                        else:
+                            result["message"] = f"属性 {attr_name} 期望 '{expected}'，实际 '{actual}'"
+
+            else:
+                result["message"] = f"未知断言类型: {assert_type}"
+
+        except Exception as e:
+            result["message"] = f"断言失败: {str(e)}"
+
+        return result
 
     def _replace_variables(self, data: dict, variables: dict) -> dict:
         """替换数据中的变量"""

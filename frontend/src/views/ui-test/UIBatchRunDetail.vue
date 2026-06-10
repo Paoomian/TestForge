@@ -86,8 +86,8 @@
         <template v-if="selectedDetail">
           <div class="detail-header">
             <span class="detail-title">{{ selectedDetail.case_name }}</span>
-            <a-tag :color="selectedDetail.status === 'pass' ? 'green' : 'red'" size="small">
-              {{ selectedDetail.status === 'pass' ? '通过' : '失败' }}
+            <a-tag :color="getDetailStatusColor(selectedDetail.status)" size="small">
+              {{ getDetailStatusLabel(selectedDetail.status) }}
             </a-tag>
           </div>
 
@@ -226,6 +226,14 @@ async function loadTaskInfo() {
       selectedDetailId.value = firstDetail.id
       await loadDetail(firstDetail.id)
     }
+    // 同步更新选中用例的状态（从列表中获取最新状态）
+    if (selectedDetailId.value && taskInfo.value?.details) {
+      const updated = taskInfo.value.details.find((d: UIBatchRunDetail) => d.id === selectedDetailId.value)
+      if (updated && selectedDetail.value) {
+        selectedDetail.value.status = updated.status
+        selectedDetail.value.duration_ms = updated.duration_ms
+      }
+    }
   } catch (e) {
     console.error('加载任务信息失败:', e)
   }
@@ -234,6 +242,10 @@ async function loadTaskInfo() {
 function startPolling() {
   pollTimer = window.setInterval(async () => {
     await loadTaskInfo()
+    // 刷新当前选中的用例详情
+    if (selectedDetailId.value) {
+      await loadDetail(selectedDetailId.value)
+    }
     if (!isRunning.value && pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
@@ -256,7 +268,7 @@ async function selectDetail(detail: UIBatchRunDetail) {
 
 // 返回
 function goBack() {
-  router.push({ name: 'ui-case-list' })
+  router.push({ name: 'ui-batch-tasks' })
 }
 
 // 取消
@@ -283,6 +295,32 @@ function getActionLabel(action: string): string {
     go_back: '返回',
   }
   return map[action] || action
+}
+
+// 详情状态颜色
+function getDetailStatusColor(status: string): string {
+  const map: Record<string, string> = {
+    pass: 'green',
+    fail: 'red',
+    error: 'orange',
+    running: 'blue',
+    pending: 'gray',
+    skipped: 'gray',
+  }
+  return map[status] || 'gray'
+}
+
+// 详情状态标签
+function getDetailStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pass: '通过',
+    fail: '失败',
+    error: '错误',
+    running: '执行中',
+    pending: '待执行',
+    skipped: '已跳过',
+  }
+  return map[status] || status
 }
 
 onMounted(async () => {
