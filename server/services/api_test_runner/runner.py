@@ -154,6 +154,181 @@ class TestRunner:
 
         return result
 
+    async def run_from_form(
+        self,
+        form_data: dict,
+        environment_id: int | None = None,
+        temp_variables: dict[str, str] | None = None,
+    ) -> RunResult:
+        """直接从表单数据执行（不保存到数据库）"""
+        start_time = time.monotonic()
+
+        # 初始化结果
+        result = RunResult(status="pass")
+        variables: dict[str, str] = {}
+        request_snapshot = None
+        response_info = None
+
+        try:
+            # 1. 加载环境变量
+            env_vars = {}
+            if environment_id:
+                env_vars = self._load_env_vars(environment_id)
+
+            # 2. 合并变量
+            variables = self.variable_service.merge_variables(
+                env_vars=env_vars,
+                temp_vars=temp_variables,
+            )
+
+            # 3. 构建请求配置
+            request_config = self._build_request_config_from_form(form_data, variables)
+
+            # 4. 执行前置脚本
+            setup_script = form_data.get("setup_script")
+            if setup_script:
+                script_result = self.script_service.execute(
+                    setup_script,
+                    {"variables": variables, "request": request_config}
+                )
+                result.script_output["setup"] = {
+                    "success": script_result.success,
+                    "output": script_result.output,
+                    "error": script_result.error,
+                }
+                if script_result.variables:
+                    variables.update(script_result.variables)
+
+            # 5. 发送HTTP请求
+            body_type = form_data.get("body_type", "none")
+            http_result = await self.http_service.send_request(
+                method=request_config["method"],
+                url=request_config["url"],
+                headers=request_config["headers"],
+                query_params=request_config["params"],
+                body=request_config.get("body"),
+                body_type=body_type,
+                auth_config=request_config.get("auth"),
+            )
+
+            request_snapshot = http_result["request_snapshot"]
+            response_info = http_result["response_info"]
+
+            if http_result.get("error"):
+                result.status = "error"
+                result.error_message = http_result["error"]
+                result.request_snapshot = request_snapshot
+                result.duration_ms = int((time.monotonic() - start_time) * 1000)
+                return result
+
+            # 6. 执行后置脚本
+            teardown_script = form_data.get("teardown_script")
+            if teardown_script:
+                script_result = self.script_service.execute(
+                    teardown_script,
+                    {"variables": variables, "request": request_snapshot, "response": response_info}
+                )
+                result.script_output["teardown"] = {
+                    "success": script_result.success,
+                    "output": script_result.output,
+                    "error": script_result.error,
+                }
+                if script_result.variables:
+                    variables.update(script_result.variables)
+
+            # 7. 数据规则执行
+            data_rules = form_data.get("data_rules", [])
+            if data_rules:
+                rule_results = self.data_rule_service.execute_rules(data_rules, variables, response_info)
+                result.data_rule_variables = rule_results
+                variables.update(rule_results)
+
+            # 8. 断言执行
+            assertions = form_data.get("assertions", [])
+            if assertions:
+                assertion_results = self.assertion_service.execute_assertions(
+                    assertions, response_info, variables
+                )
+                result.assertions = [
+                    AssertionResult(
+                        assertion_type=r.assertion_type,
+                        field=r.field,
+                        operator=r.operator,
+                        expected=r.expected,
+                        actual=r.actual,
+                        passed=r.passed,
+                        error=r.error,
+                    )
+                    for r in assertion_results
+                ]
+
+                # 判断最终状态
+                if any(not r.passed for r in assertion_results):
+                    result.status = "fail"
+
+        except Exception as e:
+            result.status = "error"
+            result.error_message = f"执行异常: {str(e)}"
+
+        # 填充请求和响应信息
+        result.request_snapshot = request_snapshot
+        result.response_info = response_info
+        result.duration_ms = int((time.monotonic() - start_time) * 1000)
+
+        return result
+
+    def _build_request_config_from_form(self, form_data: dict, variables: dict) -> dict:
+        """从表单数据构建请求配置"""
+        method = form_data.get("method", "GET").upper()
+        url = self.variable_service.resolve_variables(form_data.get("url", ""), variables)
+
+        # URL 处理 - 自动补全 base_url
+        if url and not url.startswith(("http://", "https://")):
+            base_url = variables.get("base_url", "")
+            if base_url:
+                url = f"{base_url}/{url.lstrip('/')}"
+
+        # 处理 headers
+        headers = {}
+        for h in form_data.get("headers", []):
+            if h.get("enabled", True) and h.get("key"):
+                key = self.variable_service.resolve_variables(h["key"], variables)
+                value = self.variable_service.resolve_variables(h.get("value", ""), variables)
+                headers[key] = value
+
+        # 处理 query params
+        params = {}
+        for p in form_data.get("query_params", []):
+            if p.get("enabled", True) and p.get("key"):
+                key = self.variable_service.resolve_variables(p["key"], variables)
+                value = self.variable_service.resolve_variables(p.get("value", ""), variables)
+                params[key] = value
+
+        # 处理 body
+        body = None
+        body_type = form_data.get("body_type", "none")
+        if body_type == "form-data" or body_type == "x-www-form-urlencoded":
+            body = {}
+            for item in form_data.get("body_form", []):
+                if item.get("enabled", True) and item.get("key"):
+                    key = self.variable_service.resolve_variables(item["key"], variables)
+                    value = self.variable_service.resolve_variables(item.get("value", ""), variables)
+                    body[key] = value
+        elif body_type.startswith("raw"):
+            body = form_data.get("body_raw", "")
+
+        # 处理 auth
+        auth = form_data.get("auth", {})
+
+        return {
+            "method": method,
+            "url": url,
+            "headers": headers,
+            "params": params,
+            "body": body,
+            "auth": auth,
+        }
+
     def prepare_case(
         self,
         case_id: int,

@@ -132,20 +132,6 @@
                 <a-radio value="stop">遇到失败停止</a-radio>
               </a-radio-group>
             </a-form-item>
-            <a-form-item label="浏览器">
-              <a-select v-model="form.browser">
-                <a-option value="chrome">Chrome</a-option>
-                <a-option value="firefox">Firefox</a-option>
-                <a-option value="edge">Edge</a-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item label="视口尺寸">
-              <a-select v-model="form.viewport">
-                <a-option value="1280x720">1280 x 720</a-option>
-                <a-option value="1920x1080">1920 x 1080</a-option>
-                <a-option value="375x812">iPhone (375 x 812)</a-option>
-              </a-select>
-            </a-form-item>
           </a-form>
         </a-card>
       </a-col>
@@ -210,7 +196,6 @@ const form = reactive({
   environment_id: undefined as number | undefined,
   failure_strategy: 'continue',
   browser: 'chrome',
-  viewport: '1280x720',
 })
 
 // 提交状态
@@ -336,14 +321,13 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const [width, height] = form.viewport.split('x').map(Number)
     const result = await createUIBatchRun({
       case_ids: selectedCases.value.map(c => c.id),
       environment_id: form.environment_id,
       failure_strategy: form.failure_strategy,
       browser: form.browser,
-      viewport_width: width,
-      viewport_height: height,
+      viewport_width: 1280,
+      viewport_height: 720,
     })
 
     Message.success('任务已创建，开始执行')

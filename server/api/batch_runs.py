@@ -148,7 +148,7 @@ async def batch_delete_runs(
 @router.get("", response_model=dict)
 async def list_batch_runs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     status: str = Query(None),
     config_mode: str = Query(None),
     test_type: str = Query(None),
@@ -159,7 +159,7 @@ async def list_batch_runs(
     if test_type:
         query = db.query(TestRun).filter(TestRun.test_type == test_type)
     else:
-        query = db.query(TestRun).filter(TestRun.test_type.in_(["api_batch", "api_scene"]))
+        query = db.query(TestRun)  # 返回所有类型
 
     # 状态筛选
     if status:
@@ -186,6 +186,7 @@ async def list_batch_runs(
             id=run.id,
             name=run.name,
             status=run.status or "pending",
+            test_type=run.test_type or "api_batch",
             config_mode=run.config_mode or "simple",
             concurrency=run.concurrency,
             failure_strategy=run.failure_strategy,

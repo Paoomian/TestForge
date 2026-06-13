@@ -4,7 +4,7 @@
     <div class="detail-header">
       <a-button type="text" @click="goBack">
         <template #icon><icon-left /></template>
-        返回任务列表
+        返回
       </a-button>
       <div class="header-actions">
         <a-button
@@ -102,6 +102,14 @@
               :pagination="false"
               :loading="tableLoading"
             >
+              <template #case_number="{ record }">
+                <span :title="record.case_number">{{ record.case_number || '-' }}</span>
+              </template>
+
+              <template #case_name="{ record }">
+                <span :title="record.case_name">{{ record.case_name || '-' }}</span>
+              </template>
+
               <template #node_type="{ record }">
                 <a-tag :color="getNodeTypeColor(record.node_type)" size="small">
                   {{ getNodeTypeText(record.node_type) }}
@@ -112,6 +120,11 @@
                 <a-tag :color="getDetailStatusColor(record.status)" size="small">
                   {{ getDetailStatusText(record.status) }}
                 </a-tag>
+              </template>
+
+              <template #error_message="{ record }">
+                <span v-if="record.error_message" :title="record.error_message" class="error-text">{{ record.error_message }}</span>
+                <span v-else>-</span>
               </template>
 
               <template #api_duration_ms="{ record }">
@@ -175,13 +188,13 @@ const selectedDetailId = ref(0)
 const detailColumns = [
   { title: '序号', dataIndex: 'execution_order', width: 60 },
   { title: '类型', dataIndex: 'node_type', slotName: 'node_type', width: 100 },
-  { title: '用例编号', dataIndex: 'case_number', width: 130, ellipsis: true },
-  { title: '用例名称', dataIndex: 'case_name', width: 180, ellipsis: true },
+  { title: '用例编号', dataIndex: 'case_number', slotName: 'case_number', width: 130, ellipsis: true },
+  { title: '用例名称', dataIndex: 'case_name', slotName: 'case_name', width: 180, ellipsis: true },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 80 },
   { title: '状态码', dataIndex: 'status_code', width: 70 },
   { title: '接口耗时', dataIndex: 'api_duration_ms', slotName: 'api_duration_ms', width: 90 },
   { title: '总耗时', dataIndex: 'duration_ms', slotName: 'duration_ms', width: 90 },
-  { title: '错误信息', dataIndex: 'error_message', width: 180, ellipsis: true },
+  { title: '错误信息', dataIndex: 'error_message', slotName: 'error_message', width: 180, ellipsis: true },
   { title: '操作', slotName: 'actions', width: 80, fixed: 'right' as const }
 ]
 
@@ -236,7 +249,7 @@ const formatDuration = (ms: number) => {
 }
 
 const goBack = () => {
-  router.push({ name: 'api-batch-tasks' })
+  router.back()
 }
 
 const loadTaskInfo = async () => {

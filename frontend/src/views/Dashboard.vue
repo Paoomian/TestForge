@@ -46,7 +46,8 @@
         <div class="stat-card-trend" :class="card.trend > 0 ? 'trend-up' : 'trend-down'" v-if="card.trend">
           <icon-arrow-rise v-if="card.trend > 0" />
           <icon-arrow-fall v-else />
-          {{ Math.abs(card.trend) }}%
+          <template v-if="card.trendLabel === '较昨日'">{{ Math.abs(card.trend) }}%</template>
+          <template v-else>本周+{{ card.trend }}</template>
         </div>
       </div>
     </div>
@@ -98,7 +99,7 @@
               v-for="run in recentRuns"
               :key="run.id"
               class="run-card"
-              @click="$router.push({ name: 'api-batch-task-detail', params: { taskId: run.id } })"
+              @click="run.test_type === 'ui_batch' ? $router.push({ name: 'ui-batch-run-detail', params: { runId: run.id } }) : $router.push({ name: 'api-batch-task-detail', params: { taskId: run.id } })"
             >
               <div class="run-card-top">
                 <span class="run-card-name">{{ run.name }}</span>
@@ -204,10 +205,10 @@ const timeOfDay = computed(() => {
 })
 
 const statCards = ref([
-  { label: '项目总数', value: 0, unit: '个', icon: markRaw(IconFolder), iconBg: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', iconColor: '#7c3aed', route: { name: 'project-list' }, trend: 12 },
-  { label: 'UI 用例', value: 0, unit: '条', icon: markRaw(IconDesktop), iconBg: 'linear-gradient(135deg,#e0e7ff,#c7d2fe)', iconColor: '#6366f1', route: { name: 'ui-case-list' }, trend: 8 },
-  { label: '接口用例', value: 0, unit: '条', icon: markRaw(IconCode), iconBg: 'linear-gradient(135deg,#dbeafe,#bfdbfe)', iconColor: '#3b82f6', route: { name: 'api-test-manage' }, trend: 15 },
-  { label: '今日执行', value: 0, unit: '次', icon: markRaw(IconPlayArrow), iconBg: 'linear-gradient(135deg,#d1fae5,#a7f3d0)', iconColor: '#059669', route: { name: 'report-list' }, trend: -5 },
+  { label: '项目总数', value: 0, unit: '个', icon: markRaw(IconFolder), iconBg: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', iconColor: '#7c3aed', route: { name: 'project-list' }, trend: 0, trendLabel: '本周新增' },
+  { label: 'UI 用例', value: 0, unit: '条', icon: markRaw(IconDesktop), iconBg: 'linear-gradient(135deg,#e0e7ff,#c7d2fe)', iconColor: '#6366f1', route: { name: 'ui-case-list' }, trend: 0, trendLabel: '本周新增' },
+  { label: '接口用例', value: 0, unit: '条', icon: markRaw(IconCode), iconBg: 'linear-gradient(135deg,#dbeafe,#bfdbfe)', iconColor: '#3b82f6', route: { name: 'api-test-manage' }, trend: 0, trendLabel: '本周新增' },
+  { label: '今日执行', value: 0, unit: '次', icon: markRaw(IconPlayArrow), iconBg: 'linear-gradient(135deg,#d1fae5,#a7f3d0)', iconColor: '#059669', route: { name: 'report-list' }, trend: 0, trendLabel: '较昨日' },
 ])
 
 const recentRuns = ref<RecentRun[]>([])
@@ -219,9 +220,9 @@ const distributionData = ref<CaseDistribution[]>([])
 const rateItems = computed(() => {
   const t = passRate.total || 1
   return [
-    { label: '通过', value: passRate.pass, pct: (passRate.pass / t * 100).toFixed(0), color: '#10b981', colorLight: '#6ee7b7' },
-    { label: '失败', value: passRate.fail, pct: (passRate.fail / t * 100).toFixed(0), color: '#f43f5e', colorLight: '#fda4af' },
-    { label: '错误', value: passRate.error, pct: (passRate.error / t * 100).toFixed(0), color: '#f59e0b', colorLight: '#fcd34d' },
+    { label: '通过', value: passRate.pass, pct: (passRate.pass / t * 100).toFixed(1), color: '#10b981', colorLight: '#6ee7b7' },
+    { label: '失败', value: passRate.fail, pct: (passRate.fail / t * 100).toFixed(1), color: '#f43f5e', colorLight: '#fda4af' },
+    { label: '错误', value: passRate.error, pct: (passRate.error / t * 100).toFixed(1), color: '#f59e0b', colorLight: '#fcd34d' },
   ]
 })
 
@@ -254,6 +255,12 @@ async function loadStats() {
     statCards.value[1].value = d.ui_case_count
     statCards.value[2].value = d.api_case_count
     statCards.value[3].value = d.today_run_count
+    if (d.trends) {
+      statCards.value[0].trend = d.trends.project
+      statCards.value[1].trend = d.trends.ui_case
+      statCards.value[2].trend = d.trends.api_case
+      statCards.value[3].trend = d.trends.today_run
+    }
   } catch (e) { console.error(e) }
 }
 async function loadRecentRuns() {
@@ -274,7 +281,20 @@ function renderTrend() {
   if (!trendChart) trendChart = echarts.init(trendChartRef.value)
   const dates = trendData.value.map(i => i.date)
   trendChart.setOption({
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#f3f4f6', textStyle: { color: '#374151' } },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#fff',
+      borderColor: '#f3f4f6',
+      textStyle: { color: '#374151', fontSize: 12 },
+      formatter: (params: any) => {
+        const colors: Record<string, string> = { '通过': '#10b981', '失败': '#f43f5e', '错误': '#f59e0b' }
+        let html = `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValue}</div>`
+        for (const p of params) {
+          html += `<div style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${colors[p.seriesName] || '#9ca3af'}"></span>${p.seriesName}：${p.value}</div>`
+        }
+        return html
+      },
+    },
     legend: { show: false },
     grid: { left: 40, right: 16, top: 16, bottom: 28 },
     xAxis: { type: 'category', data: dates, boundaryGap: false, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#9ca3af', fontSize: 11 } },
@@ -293,27 +313,33 @@ function renderRate() {
   if (passRateChart) passRateChart.dispose()
   passRateChart = echarts.init(passRateChartRef.value)
   const total = passRate.pass + passRate.fail + passRate.error
+  const colors = [
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#6ee7b7' }] },
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#ef4444' }, { offset: 1, color: '#fca5a5' }] },
+    { type: 'linear', x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#fcd34d' }] },
+  ]
   passRateChart.setOption({
     series: [{
       type: 'pie',
-      radius: ['68%', '90%'],
+      radius: ['45%', '80%'],
       center: ['50%', '50%'],
+      padAngle: 3,
       label: { show: false },
       labelLine: { show: false },
-      emphasis: { scale: false, disabled: true },
+      emphasis: { scale: true, scaleSize: 6 },
       itemStyle: {
-        borderRadius: 6,
+        borderRadius: 8,
         borderColor: '#fff',
-        borderWidth: 2,
+        borderWidth: 3,
       },
       data: [
-        { value: passRate.pass, itemStyle: { color: '#059669' } },
-        { value: passRate.fail, itemStyle: { color: '#e11d48' } },
-        { value: passRate.error, itemStyle: { color: '#d97706' } },
-        { value: total === 0 ? 1 : 0, itemStyle: { color: '#f9fafb' } },
+        { value: passRate.pass, itemStyle: { color: colors[0] } },
+        { value: passRate.fail, itemStyle: { color: colors[1] } },
+        { value: passRate.error, itemStyle: { color: colors[2] } },
+        { value: total === 0 ? 1 : 0, itemStyle: { color: '#f3f4f6' } },
       ],
     }],
-    animationDuration: 1200,
+    animationDuration: 800,
     animationEasing: 'cubicOut',
   })
 }
@@ -465,16 +491,17 @@ onUnmounted(() => {
 
 /* ---- 通过率 ---- */
 .rate-body { display: flex; align-items: center; gap: 32px; }
-.rate-chart-wrap { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
-.rate-chart { width: 100%; height: 100%; }
+.rate-chart-wrap { position: relative; width: 150px; height: 150px; flex-shrink: 0; background: white; border-radius: 50%; }
+.rate-chart { width: 100%; height: 100%; position: relative; z-index: 0; }
 .rate-center {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  background: radial-gradient(circle, rgba(255,255,255,0.9) 60%, transparent 100%);
+  background: radial-gradient(circle, rgba(255,255,255,1) 38%, rgba(255,255,255,1) 42%, rgba(255,255,255,0) 43%);
   border-radius: 50%;
+  z-index: 1;
 }
-.rate-num { font-size: 38px; font-weight: 800; color: #111827; line-height: 1; }
-.rate-pct { font-size: 14px; color: #9ca3af; margin-top: 2px; font-weight: 500; }
+.rate-num { font-size: 26px; font-weight: 700; color: #374151; line-height: 1; }
+.rate-pct { font-size: 12px; color: #9ca3af; margin-top: 1px; font-weight: 500; }
 .rate-bars { flex: 1; display: flex; flex-direction: column; gap: 16px; }
 .rate-bar-item { transition: all 0.2s; }
 .rate-bar-item:hover { transform: translateX(4px); }
@@ -482,7 +509,7 @@ onUnmounted(() => {
 .rbi-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(0,0,0,0.04); }
 .rbi-label { font-size: 13px; color: #6b7280; flex: 1; font-weight: 500; }
 .rbi-val { font-size: 14px; font-weight: 700; color: #111827; min-width: 32px; text-align: right; }
-.rbi-pct { font-size: 11px; color: #9ca3af; min-width: 36px; text-align: right; }
+.rbi-pct { font-size: 11px; color: #9ca3af; min-width: 44px; text-align: right; }
 .rbi-track { height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
 .rbi-fill { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
 

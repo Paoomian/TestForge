@@ -44,4 +44,18 @@ celery_app.conf.update(
 )
 
 # 使用 include 直接指定任务模块，避免自动发现
-celery_app.conf.include = ["tasks.batch_run_task", "tasks.scene_run_task", "tasks.ai_generate_tasks", "tasks.ui_batch_run_task"]
+celery_app.conf.include = [
+    "tasks.batch_run_task",
+    "tasks.scene_run_task",
+    "tasks.ai_generate_tasks",
+    "tasks.ui_batch_run_task",
+    "tasks.scheduler_task",
+]
+
+# Celery Beat 定时调度配置
+celery_app.conf.beat_schedule = {
+    "scheduler-tick-every-minute": {
+        "task": "tasks.scheduler_tick",
+        "schedule": 60.0,  # 每 60 秒执行一次
+    },
+}

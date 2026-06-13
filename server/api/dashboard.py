@@ -16,29 +16,45 @@ def get_dashboard_stats(
     current_user=Depends(get_current_user),
 ):
     """获取仪表盘统计数据"""
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    week_start = today_start - timedelta(days=now.weekday())  # 本周一
+    last_week_start = week_start - timedelta(days=7)
+
     # 项目总数
     project_count = db.query(func.count(Project.id)).scalar() or 0
+    # 本周新增项目
+    week_new_projects = db.query(func.count(Project.id)).filter(
+        Project.created_at >= week_start
+    ).scalar() or 0
 
     # UI 用例数
     ui_case_count = db.query(func.count(UICase.id)).scalar() or 0
+    week_new_ui = db.query(func.count(UICase.id)).filter(
+        UICase.created_at >= week_start
+    ).scalar() or 0
 
     # 接口用例数（包括旧的 APICase 和新的 APITestCase）
     api_case_count = db.query(func.count(APICase.id)).scalar() or 0
     api_test_case_count = db.query(func.count(APITestCase.id)).scalar() or 0
     total_api_cases = api_case_count + api_test_case_count
-
-    # 今日执行数（使用数据库日期函数，避免时区问题）
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_run_count = db.query(func.count(TestRun.id)).filter(
-        TestRun.created_at >= today
+    week_new_api = db.query(func.count(APICase.id)).filter(
+        APICase.created_at >= week_start
+    ).scalar() or 0
+    week_new_api += db.query(func.count(APITestCase.id)).filter(
+        APITestCase.created_at >= week_start
     ).scalar() or 0
 
-    # 如果今日执行数为0，尝试使用本地时间
-    if today_run_count == 0:
-        today_local = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_run_count = db.query(func.count(TestRun.id)).filter(
-            TestRun.created_at >= today_local
-        ).scalar() or 0
+    # 今日执行数
+    today_run_count = db.query(func.count(TestRun.id)).filter(
+        TestRun.created_at >= today_start
+    ).scalar() or 0
+    # 昨日执行数
+    yesterday_run_count = db.query(func.count(TestRun.id)).filter(
+        TestRun.created_at >= yesterday_start,
+        TestRun.created_at < today_start
+    ).scalar() or 0
 
     # 总执行数
     total_run_count = db.query(func.count(TestRun.id)).scalar() or 0
@@ -54,6 +70,12 @@ def get_dashboard_stats(
             "created_at": last_run.created_at.strftime("%Y-%m-%d %H:%M:%S") if last_run.created_at else None,
         }
 
+    # 今日较昨日的变化百分比
+    def calc_day_trend(today, yesterday):
+        if yesterday == 0:
+            return 100 if today > 0 else 0
+        return round((today - yesterday) / yesterday * 100, 1)
+
     return {
         "project_count": project_count,
         "ui_case_count": ui_case_count,
@@ -61,6 +83,12 @@ def get_dashboard_stats(
         "today_run_count": today_run_count,
         "total_run_count": total_run_count,
         "last_run": last_run_info,
+        "trends": {
+            "project": week_new_projects,
+            "ui_case": week_new_ui,
+            "api_case": week_new_api,
+            "today_run": calc_day_trend(today_run_count, yesterday_run_count),
+        },
     }
 
 

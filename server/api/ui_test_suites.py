@@ -188,13 +188,11 @@ async def update_ui_test_suite(
     if not suite:
         raise HTTPException(status_code=404, detail="任务配置不存在")
 
-    # 验证用例存在
+    # 过滤掉已删除的用例ID
     if req.case_ids is not None:
         cases = db.query(UICase).filter(UICase.id.in_(req.case_ids)).all()
-        if len(cases) != len(req.case_ids):
-            found_ids = {c.id for c in cases}
-            missing = [cid for cid in req.case_ids if cid not in found_ids]
-            raise HTTPException(status_code=400, detail=f"用例不存在: {missing}")
+        valid_ids = {c.id for c in cases}
+        req.case_ids = [cid for cid in req.case_ids if cid in valid_ids]
 
     # 更新字段
     update_data = req.model_dump(exclude_unset=True)

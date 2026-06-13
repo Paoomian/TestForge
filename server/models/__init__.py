@@ -19,6 +19,7 @@ from .ai_generate import AIProviderConfig, AIGenerateTask
 from .ai_skill import AISkill
 from .monkey import MonkeyPreset
 from .ui_test_suite import UITestSuite
+from .scheduled_task import ScheduledTask
 
 __all__ = [
     "User",
@@ -48,4 +49,5 @@ __all__ = [
     "AssignSource",
     "MonkeyPreset",
     "UITestSuite",
+    "ScheduledTask",
 ]

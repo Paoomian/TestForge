@@ -13,6 +13,12 @@ export interface DashboardStats {
     status: string
     created_at: string
   } | null
+  trends: {
+    project: number
+    ui_case: number
+    api_case: number
+    today_run: number
+  }
 }
 
 /** 最近执行记录 */

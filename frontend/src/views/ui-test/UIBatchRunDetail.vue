@@ -84,15 +84,36 @@
       <!-- 右侧：详情/截图 -->
       <div class="detail-panel">
         <template v-if="selectedDetail">
-          <div class="detail-header">
-            <span class="detail-title">{{ selectedDetail.case_name }}</span>
-            <a-tag :color="getDetailStatusColor(selectedDetail.status)" size="small">
-              {{ getDetailStatusLabel(selectedDetail.status) }}
-            </a-tag>
+          <!-- 执行中动画 -->
+          <div v-if="selectedDetail.status === 'running'" class="running-animation">
+            <div class="running-content">
+              <div class="running-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+              </div>
+              <div class="running-text">
+                <span class="running-title">用例执行中</span>
+                <span class="running-hint">请稍候，正在执行测试步骤...</span>
+              </div>
+              <div class="running-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </div>
+            </div>
           </div>
 
-          <!-- 步骤列表 -->
-          <div class="steps-list" v-if="selectedDetail.steps?.length">
+          <template v-else>
+            <div class="detail-header">
+              <span class="detail-title">{{ selectedDetail.case_name }}</span>
+              <a-tag :color="getDetailStatusColor(selectedDetail.status)" size="small">
+                {{ getDetailStatusLabel(selectedDetail.status) }}
+              </a-tag>
+            </div>
+
+            <!-- 步骤列表 -->
+            <div class="steps-list" v-if="selectedDetail.steps?.length">
             <div
               v-for="step in selectedDetail.steps"
               :key="step.step_order"
@@ -105,7 +126,15 @@
                 <span class="step-duration">{{ step.duration_ms }}ms</span>
               </div>
               <div v-if="step.message" class="step-message" :class="{ error: step.status === 'fail' }">
-                {{ step.message }}
+                <span>{{ getTranslatedError(step.message).translated }}</span>
+                <a-link
+                  v-if="getTranslatedError(step.message).hasTranslation"
+                  class="step-show-original"
+                  @click="toggleStepOriginal(step)"
+                >
+                  {{ step._showOriginal ? '收起' : '原文' }}
+                </a-link>
+                <pre v-if="step._showOriginal" class="step-error-original">{{ step.message }}</pre>
               </div>
               <div v-if="step.screenshot" class="step-screenshot">
                 <img :src="`data:image/jpeg;base64,${step.screenshot}`" alt="截图" />
@@ -116,8 +145,19 @@
           <!-- 错误信息 -->
           <div v-if="selectedDetail.error_message" class="error-message">
             <icon-exclamation-circle />
-            <span>{{ selectedDetail.error_message }}</span>
+            <div class="error-content">
+              <span>{{ getTranslatedError(selectedDetail.error_message).translated }}</span>
+              <a-link
+                v-if="getTranslatedError(selectedDetail.error_message).hasTranslation"
+                class="show-original"
+                @click="showOriginalError = !showOriginalError"
+              >
+                {{ showOriginalError ? '收起' : '查看原文' }}
+              </a-link>
+              <pre v-if="showOriginalError" class="error-original">{{ selectedDetail.error_message }}</pre>
+            </div>
           </div>
+          </template>
         </template>
 
         <div v-else class="empty-detail">
@@ -145,6 +185,7 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { getUIBatchRun, getUIBatchRunDetail, cancelUIBatchRun } from '@/api/uiBatchRun'
 import type { UIBatchRun, UIBatchRunDetail } from '@/api/uiBatchRun'
+import { formatErrorMessage } from '@/utils/errorTranslator'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,6 +198,17 @@ const taskInfo = ref<UIBatchRun | null>(null)
 // 选中的详情
 const selectedDetailId = ref<number | null>(null)
 const selectedDetail = ref<UIBatchRunDetail | null>(null)
+
+// 错误信息翻译
+const showOriginalError = ref(false)
+
+function getTranslatedError(message: string) {
+  return formatErrorMessage(message)
+}
+
+function toggleStepOriginal(step: any) {
+  step._showOriginal = !step._showOriginal
+}
 
 // 加载详情
 async function loadDetail(detailId: number) {
@@ -268,7 +320,7 @@ async function selectDetail(detail: UIBatchRunDetail) {
 
 // 返回
 function goBack() {
-  router.push({ name: 'ui-batch-tasks' })
+  router.back()
 }
 
 // 取消
@@ -492,6 +544,8 @@ onUnmounted(() => {
   border: 1px solid #e5e6eb;
   padding: 20px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .detail-header {
@@ -570,6 +624,142 @@ onUnmounted(() => {
   color: #f53f3f;
 }
 
+.step-show-original {
+  font-size: 12px;
+  color: #f53f3f;
+  margin-left: 8px;
+  opacity: 0.8;
+}
+
+.step-show-original:hover {
+  opacity: 1;
+}
+
+.step-error-original {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #86909c;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* 执行中动画 */
+.running-animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 20px;
+}
+
+.running-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.running-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.spinner-ring:nth-child(1) {
+  border-top-color: #165dff;
+  animation: spin 1.2s linear infinite;
+}
+
+.spinner-ring:nth-child(2) {
+  width: 60px;
+  height: 60px;
+  top: 10px;
+  left: 10px;
+  border-right-color: #00b42a;
+  animation: spin 1.5s linear infinite reverse;
+}
+
+.spinner-ring:nth-child(3) {
+  width: 40px;
+  height: 40px;
+  top: 20px;
+  left: 20px;
+  border-bottom-color: #ff7d00;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.running-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.running-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.running-hint {
+  font-size: 14px;
+  color: #86909c;
+}
+
+.running-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: #165dff;
+  border-radius: 50%;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+.dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .step-screenshot {
   margin-top: 12px;
 }
@@ -583,7 +773,7 @@ onUnmounted(() => {
 /* 错误信息 */
 .error-message {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px 16px;
   background: #fff2f0;
@@ -591,6 +781,40 @@ onUnmounted(() => {
   color: #f53f3f;
   font-size: 13px;
   margin-top: 16px;
+}
+
+.error-message .arco-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.show-original {
+  font-size: 12px;
+  color: #f53f3f;
+  margin-left: 8px;
+  opacity: 0.8;
+}
+
+.show-original:hover {
+  opacity: 1;
+}
+
+.error-original {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #86909c;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 150px;
+  overflow-y: auto;
 }
 
 /* 空状态 */

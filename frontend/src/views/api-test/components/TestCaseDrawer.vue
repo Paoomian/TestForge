@@ -2,77 +2,197 @@
   <a-drawer
     v-model:visible="visible"
     :title="isEdit ? '编辑用例' : '新建用例'"
-    width="900px"
+    :width="drawerWidth"
     @cancel="handleCancel"
   >
     <!-- 工具栏 -->
     <template #title-extra>
-      <a-space v-if="!isEdit">
-        <a-button size="small" @click="showTemplateModal = true">
+      <a-space>
+        <a-button v-if="!isEdit" size="small" @click="showTemplateModal = true">
           <template #icon><icon-file /></template>
           从模板创建
         </a-button>
-        <a-button size="small" @click="showCurlModal = true">
+        <a-button v-if="!isEdit" size="small" @click="showCurlModal = true">
           <template #icon><icon-import /></template>
           导入cURL
+        </a-button>
+        <a-button
+          type="outline"
+          status="success"
+          size="small"
+          :loading="debugLoading"
+          @click="handleDebug"
+        >
+          发送请求
         </a-button>
       </a-space>
     </template>
 
-    <a-tabs v-model:active-key="activeTab" :destroy-on-hide="false">
-      <!-- Tab1: 基本信息 -->
-      <a-tab-pane key="basic" title="基本信息">
-        <BasicInfoTab
-          :form-data="formData"
-          :projects="projects"
-          :module-tree-raw="moduleTreeRaw"
-          :is-edit="isEdit"
-          @update="handleFieldUpdate"
-        />
-      </a-tab-pane>
+    <div class="drawer-body" :class="{ 'has-response': showResponse }">
+      <!-- 左侧：编辑表单 -->
+      <div class="editor-panel">
+        <a-tabs v-model:active-key="activeTab" :destroy-on-hide="false">
+          <!-- Tab1: 基本信息 -->
+          <a-tab-pane key="basic" title="基本信息">
+            <BasicInfoTab
+              :form-data="formData"
+              :projects="projects"
+              :module-tree-raw="moduleTreeRaw"
+              :is-edit="isEdit"
+              @update="handleFieldUpdate"
+            />
+          </a-tab-pane>
 
-      <!-- Tab2: 请求配置 -->
-      <a-tab-pane key="request" title="请求配置">
-        <RequestConfigTab
-          :form-data="formData"
-          :raw-content="rawContent"
-          :project-id="formData.project_id"
-          @update="handleFieldUpdate"
-          @update:raw-content="rawContent = $event"
-        />
-      </a-tab-pane>
+          <!-- Tab2: 请求配置 -->
+          <a-tab-pane key="request" title="请求配置">
+            <RequestConfigTab
+              :form-data="formData"
+              :raw-content="rawContent"
+              :project-id="formData.project_id"
+              @update="handleFieldUpdate"
+              @update:raw-content="rawContent = $event"
+            />
+          </a-tab-pane>
 
-      <!-- Tab3: 断言与提取 -->
-      <a-tab-pane key="assertion-extract" title="断言与提取">
-        <AssertionExtractTab
-          :assertions="formData.assertions"
-          :data-rules="formData.data_rules"
-          @update:assertions="formData.assertions = $event"
-          @update:data-rules="formData.data_rules = $event"
-        />
-      </a-tab-pane>
+          <!-- Tab3: 断言与提取 -->
+          <a-tab-pane key="assertion-extract" title="断言与提取">
+            <AssertionExtractTab
+              :assertions="formData.assertions"
+              :data-rules="formData.data_rules"
+              @update:assertions="formData.assertions = $event"
+              @update:data-rules="formData.data_rules = $event"
+            />
+          </a-tab-pane>
 
-      <!-- Tab4: 脚本 -->
-      <a-tab-pane key="script" title="脚本">
-        <ScriptTab
-          :setup-script="formData.setup_script || ''"
-          :teardown-script="formData.teardown_script || ''"
-          @update:setup-script="formData.setup_script = $event"
-          @update:teardown-script="formData.teardown_script = $event"
-        />
-      </a-tab-pane>
-    </a-tabs>
+          <!-- Tab4: 脚本 -->
+          <a-tab-pane key="script" title="脚本">
+            <ScriptTab
+              :setup-script="formData.setup_script || ''"
+              :teardown-script="formData.teardown_script || ''"
+              @update:setup-script="formData.setup_script = $event"
+              @update:teardown-script="formData.teardown_script = $event"
+            />
+          </a-tab-pane>
+        </a-tabs>
+      </div>
+
+      <!-- 右侧：响应面板 -->
+      <div v-if="showResponse" class="response-panel">
+        <div class="response-header">
+          <span class="response-title">响应结果</span>
+          <a-button type="text" size="mini" @click="showResponse = false">
+            <template #icon><icon-close /></template>
+          </a-button>
+        </div>
+
+        <!-- 加载中 -->
+        <div v-if="debugLoading" class="response-loading">
+          <a-spin dot />
+          <span>请求发送中...</span>
+        </div>
+
+        <!-- 响应结果 -->
+        <template v-else-if="debugResult">
+          <!-- 状态栏 -->
+          <div class="response-status">
+            <a-tag :color="getStatusColor(debugResult.status)" size="small">
+              {{ debugResult.status === 'pass' ? '通过' : debugResult.status === 'fail' ? '失败' : '错误' }}
+            </a-tag>
+            <span v-if="debugResult.response_info?.status_code" class="status-code">
+              {{ debugResult.response_info.status_code }}
+            </span>
+            <span class="duration">{{ debugResult.duration_ms }}ms</span>
+            <span v-if="debugResult.response_info?.size_bytes" class="size">
+              {{ formatSize(debugResult.response_info.size_bytes) }}
+            </span>
+          </div>
+
+          <!-- 错误信息 -->
+          <a-alert
+            v-if="debugResult.error_message"
+            type="error"
+            :content="debugResult.error_message"
+            style="margin: 8px 12px"
+          />
+
+          <!-- 响应内容 Tab -->
+          <a-tabs v-model:active-key="responseTab" size="small" class="response-tabs">
+            <a-tab-pane key="body" title="响应体">
+              <div class="response-body">
+                <JsonViewer
+                  v-if="debugResult.response_info?.body"
+                  :content="debugResult.response_info.body"
+                  max-height="400px"
+                />
+                <a-empty v-else description="无响应内容" />
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="assertions" title="断言结果">
+              <div class="assertions-result">
+                <a-table
+                  v-if="debugResult.assertions?.length"
+                  :columns="assertionColumns"
+                  :data="debugResult.assertions"
+                  :pagination="false"
+                  size="small"
+                  :bordered="true"
+                >
+                  <template #status="{ record }">
+                    <a-tag :color="record.passed ? 'green' : 'red'" size="small">
+                      {{ record.passed ? '通过' : '失败' }}
+                    </a-tag>
+                  </template>
+                  <template #type="{ record }">
+                    <a-tag size="small">{{ assertionTypeMap[record.assertion_type] || record.assertion_type }}</a-tag>
+                  </template>
+                  <template #actual="{ record }">
+                    <span :class="{ 'value-mismatch': !record.passed }" :title="record.actual ?? '-'">{{ record.actual ?? '-' }}</span>
+                  </template>
+                  <template #expected="{ record }">
+                    <span :title="record.expected">{{ record.expected }}</span>
+                  </template>
+                  <template #error="{ record }">
+                    <span v-if="record.error" class="error-text" :title="record.error">{{ record.error }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </a-table>
+                <a-empty v-else description="未配置断言" />
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="snapshot" title="请求快照">
+              <div class="request-snapshot">
+                <JsonViewer
+                  v-if="debugResult.request_snapshot"
+                  :content="debugResult.request_snapshot"
+                  max-height="400px"
+                />
+                <a-empty v-else description="无请求快照" />
+              </div>
+            </a-tab-pane>
+          </a-tabs>
+        </template>
+      </div>
+    </div>
 
     <template #footer>
-      <a-space>
-        <a-button @click="handleCancel">取消</a-button>
-        <a-button type="secondary" :loading="submitting" @click="handleSubmit('draft')">
-          暂存草稿
+      <div style="display: flex; justify-content: space-between;">
+        <a-button
+          type="outline"
+          status="success"
+          :loading="debugLoading"
+          @click="handleDebug"
+        >
+          发送请求
         </a-button>
-        <a-button type="primary" :loading="submitting" @click="handleSubmit('active')">
-          保存
-        </a-button>
-      </a-space>
+        <a-space>
+          <a-button @click="handleCancel">取消</a-button>
+          <a-button type="primary" :loading="submitting" @click="handleSubmit">
+            保存
+          </a-button>
+        </a-space>
+      </div>
     </template>
 
     <!-- 模板选择弹窗 -->
@@ -117,8 +237,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { IconSend } from '@arco-design/web-vue/es/icon'
 import { getProjects } from '@/api/project'
 import {
   createTestCase,
@@ -127,6 +248,7 @@ import {
   getModuleTree,
   getTemplates,
   importCurl,
+  debugTestCase,
 } from '@/api/apiTestCase'
 import type {
   APITestCase,
@@ -140,8 +262,10 @@ import type {
   AssertionItem,
   DataRuleItem,
   AuthConfig,
+  RunResult,
 } from '@/api/apiTestCase'
 import type { Project } from '@/api/project'
+import JsonViewer from '@/components/JsonViewer.vue'
 import BasicInfoTab from './BasicInfoTab.vue'
 import RequestConfigTab from './RequestConfigTab.vue'
 import AssertionExtractTab from './AssertionExtractTab.vue'
@@ -177,6 +301,15 @@ const showCurlModal = ref(false)
 const curlCommand = ref('')
 const curlLoading = ref(false)
 
+// 调试相关
+const debugLoading = ref(false)
+const showResponse = ref(false)
+const debugResult = ref<RunResult | null>(null)
+const responseTab = ref('body')
+
+// 动态宽度
+const drawerWidth = computed(() => showResponse.value ? '1400px' : '900px')
+
 const rawContent = ref('')
 
 const formData = reactive({
@@ -209,6 +342,12 @@ const formData = reactive({
 watch(() => props.visible, (val) => {
   visible.value = val
   if (val) {
+    // 重置调试状态
+    showResponse.value = false
+    debugResult.value = null
+    debugLoading.value = false
+    responseTab.value = 'body'
+
     loadProjects()
     loadModuleTree()
     if (props.editData) {
@@ -343,7 +482,7 @@ const validate = (): boolean => {
   return true
 }
 
-const handleSubmit = async (saveStatus?: string) => {
+const handleSubmit = async () => {
   if (!validate()) return
 
   submitting.value = true
@@ -365,7 +504,7 @@ const handleSubmit = async (saveStatus?: string) => {
         setup_script: formData.setup_script,
         teardown_script: formData.teardown_script,
         priority: formData.priority,
-        status: saveStatus || formData.status,
+        status: formData.status,
         headers: formData.headers,
         query_params: formData.query_params,
         body_form: formData.body_form,
@@ -392,7 +531,7 @@ const handleSubmit = async (saveStatus?: string) => {
         setup_script: formData.setup_script,
         teardown_script: formData.teardown_script,
         priority: formData.priority,
-        status: saveStatus || formData.status,
+        status: formData.status,
         headers: formData.headers,
         query_params: formData.query_params,
         body_form: formData.body_form,
@@ -479,14 +618,239 @@ const handleCurlImport = async () => {
     curlLoading.value = false
   }
 }
+
+// 调试请求
+const handleDebug = async () => {
+  if (!formData.url) {
+    Message.warning('请输入请求URL')
+    activeTab.value = 'request'
+    return
+  }
+
+  debugLoading.value = true
+  showResponse.value = true
+  debugResult.value = null
+  responseTab.value = 'body'
+
+  try {
+    const result = await debugTestCase({
+      environment_id: formData.environment_id,
+      method: formData.method,
+      url: formData.url,
+      body_type: formData.body_type,
+      headers: formData.headers,
+      query_params: formData.query_params,
+      body_form: formData.body_form,
+      body_raw: rawContent.value || undefined,
+      auth: formData.auth,
+      setup_script: formData.setup_script || undefined,
+      teardown_script: formData.teardown_script || undefined,
+      assertions: formData.assertions.map(a => ({
+        assertion_type: a.assertion_type,
+        field: a.field,
+        operator: a.operator,
+        expected: a.expected || '',
+      })),
+      data_rules: formData.data_rules,
+    })
+    debugResult.value = result
+  } catch (e: any) {
+    Message.error(e?.detail || '请求执行失败')
+    showResponse.value = false
+  } finally {
+    debugLoading.value = false
+  }
+}
+
+// 断言表格列定义
+const assertionColumns = [
+  { title: '状态', dataIndex: 'passed', slotName: 'status', width: 80 },
+  { title: '类型', dataIndex: 'assertion_type', slotName: 'type', width: 120 },
+  { title: '实际值', dataIndex: 'actual', slotName: 'actual', ellipsis: true },
+  { title: '期望值', dataIndex: 'expected', slotName: 'expected', ellipsis: true },
+  { title: '错误', dataIndex: 'error', slotName: 'error', ellipsis: true },
+]
+
+// 断言类型映射
+const assertionTypeMap: Record<string, string> = {
+  status_code: '状态码',
+  jsonpath: 'JSONPath',
+  header: '响应头',
+  response_time: '响应时间',
+  body_contains: 'Body包含',
+}
+
+// 状态颜色
+const getStatusColor = (status: string) => {
+  const map: Record<string, string> = {
+    pass: 'green',
+    fail: 'red',
+    error: 'orange',
+  }
+  return map[status] || 'gray'
+}
+
+// 格式化大小
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 </script>
 
 <style scoped>
+:deep(.arco-drawer) {
+  overflow: hidden;
+  contain: layout;
+}
+
 :deep(.arco-drawer-body) {
   padding: 0;
+  overflow: hidden;
+  contain: layout;
 }
 
 :deep(.arco-tabs-content) {
   padding: 20px;
+}
+
+.drawer-body {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.drawer-body.has-response {
+  gap: 0;
+}
+
+.editor-panel {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.response-panel {
+  width: 450px;
+  border-left: 1px solid var(--color-border-2);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-1);
+  overflow: hidden;
+}
+
+.response-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-2);
+  background: var(--color-fill-1);
+}
+
+.response-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.response-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: var(--color-text-3);
+}
+
+.response-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.status-code {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.duration,
+.size {
+  font-size: 13px;
+  color: var(--color-text-3);
+}
+
+.response-tabs {
+  flex: 1;
+  overflow: hidden;
+}
+
+:deep(.response-tabs .arco-tabs-content) {
+  padding: 0;
+  height: calc(100% - 36px);
+  overflow-y: auto;
+}
+
+:deep(.response-tabs .arco-tabs-nav) {
+  padding: 0 12px;
+}
+
+.response-body,
+.request-snapshot {
+  padding: 12px 16px;
+}
+
+.response-body pre,
+.request-snapshot pre {
+  margin: 0;
+  padding: 12px;
+  background: var(--color-fill-1);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.assertions-result {
+  padding: 12px 16px;
+  overflow: auto;
+}
+
+.assertions-result :deep(.arco-table) {
+  overflow: visible;
+}
+
+.assertions-result :deep(.arco-tooltip) {
+  position: relative;
+}
+
+.assertion-pass {
+  background-color: var(--color-success-light-1);
+}
+
+.assertion-fail {
+  background-color: var(--color-danger-light-1);
+}
+
+.value-mismatch {
+  color: var(--color-danger-6);
+  font-weight: 500;
+}
+
+.error-text {
+  color: var(--color-danger-6);
+  font-size: 12px;
+}
+
+.assertion-actual {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 </style>

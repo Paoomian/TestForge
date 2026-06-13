@@ -72,7 +72,11 @@
                   <a-link @click="viewCaseDetail(record)">{{ record.name }}</a-link>
                 </template>
               </a-table-column>
-              <a-table-column title="目标 URL" data-index="base_url" :ellipsis="true" />
+              <a-table-column title="目标 URL" data-index="base_url" :ellipsis="true">
+                <template #cell="{ record }">
+                  <span :title="record.base_url">{{ record.base_url || '-' }}</span>
+                </template>
+              </a-table-column>
               <a-table-column title="步骤数" :width="100">
                 <template #cell="{ record }">
                   <a-tag color="blue" size="small">{{ record.steps?.length || 0 }} 步</a-tag>

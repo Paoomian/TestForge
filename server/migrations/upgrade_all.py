@@ -497,6 +497,36 @@ def ensure_ui_test_suites(conn):
     print("  + 创建表 ui_test_suites")
 
 
+def ensure_scheduled_tasks(conn):
+    """创建 scheduled_tasks 表（如不存在）"""
+    if table_exists(conn, "scheduled_tasks"):
+        return
+    conn.execute(text("""
+        CREATE TABLE scheduled_tasks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
+            task_type VARCHAR(20) NOT NULL DEFAULT 'api_batch',
+            suite_id INT NOT NULL,
+            environment_id INT,
+            concurrency INT DEFAULT 1,
+            failure_strategy VARCHAR(20) DEFAULT 'continue',
+            variables JSON DEFAULT NULL,
+            cron_expression VARCHAR(100) NOT NULL,
+            enabled TINYINT(1) DEFAULT 1,
+            last_run_at DATETIME,
+            next_run_at DATETIME,
+            creator_id INT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (environment_id) REFERENCES environments(id),
+            FOREIGN KEY (creator_id) REFERENCES users(id),
+            INDEX ix_scheduled_tasks_enabled (enabled),
+            INDEX ix_scheduled_tasks_next_run (next_run_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """))
+    print("  + 创建表 scheduled_tasks")
+
+
 # ==================== 主入口 ====================
 
 def ensure_innodb(conn):
@@ -556,6 +586,7 @@ def upgrade():
         upgrade_test_suites_columns(conn)
         upgrade_api_test_cases_columns(conn)
         ensure_ui_cases_extended(conn)
+        ensure_scheduled_tasks(conn)
 
         # 3. 修复外键约束
         print("\n[3/6] 修复外键约束...")

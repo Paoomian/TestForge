@@ -13,6 +13,29 @@ class RunRequest(BaseModel):
     variables: dict[str, str] = {}
 
 
+class DebugRequest(BaseModel):
+    """调试请求 - 直接传入表单数据执行"""
+    environment_id: Optional[int] = None
+    variables: dict[str, str] = {}
+    # 请求配置
+    method: str = "GET"
+    url: str = ""
+    body_type: str = "none"  # none | form-data | x-www-form-urlencoded | raw-json | raw-xml | raw-text
+    headers: list[dict] = []  # [{key, value, enabled}]
+    query_params: list[dict] = []  # [{key, value, enabled}]
+    body_form: list[dict] = []  # [{key, value, type, enabled}]
+    body_raw: Optional[str] = None
+    # 认证
+    auth: dict = {}  # {auth_type, ...}
+    # 脚本
+    setup_script: Optional[str] = None
+    teardown_script: Optional[str] = None
+    # 断言
+    assertions: list[dict] = []  # [{assertion_type, field, operator, expected}]
+    # 数据规则
+    data_rules: list[dict] = []
+
+
 class AssertionResult(BaseModel):
     """单条断言结果"""
     assertion_type: str
@@ -104,6 +127,7 @@ class BatchRunList(BaseModel):
     id: int
     name: str
     status: str
+    test_type: str = "api_batch"
     config_mode: str = "simple"
     concurrency: int
     failure_strategy: str

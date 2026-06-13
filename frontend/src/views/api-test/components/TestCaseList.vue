@@ -101,6 +101,15 @@
       row-key="id"
       @page-change="handlePageChange"
     >
+      <template #case_number="{ record }">
+        <span :title="record.case_number">{{ record.case_number }}</span>
+      </template>
+      <template #name="{ record }">
+        <span :title="record.name">{{ record.name }}</span>
+      </template>
+      <template #module="{ record }">
+        <span :title="record.module">{{ record.module || '-' }}</span>
+      </template>
       <template #method="{ record }">
         <a-tag :color="getMethodColor(record.method)">{{ record.method }}</a-tag>
       </template>
@@ -206,10 +215,10 @@ const pagination = reactive({
 })
 
 const columns = [
-  { title: '编号', dataIndex: 'case_number', width: 180, ellipsis: true },
-  { title: '用例名称', dataIndex: 'name', width: 200, ellipsis: true },
+  { title: '编号', dataIndex: 'case_number', slotName: 'case_number', width: 180, ellipsis: true },
+  { title: '用例名称', dataIndex: 'name', slotName: 'name', width: 200, ellipsis: true },
   { title: '请求方法', dataIndex: 'method', slotName: 'method', width: 100 },
-  { title: '模块', dataIndex: 'module', width: 150, ellipsis: true },
+  { title: '模块', dataIndex: 'module', slotName: 'module', width: 150, ellipsis: true },
   { title: '优先级', dataIndex: 'priority', slotName: 'priority', width: 100 },
   { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
   { title: '环境', dataIndex: 'environment_id', slotName: 'environment', width: 120 },

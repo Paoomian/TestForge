@@ -504,8 +504,16 @@
         <a-table :data="importResult.errors" :pagination="false" size="small" :bordered="false">
           <template #columns>
             <a-table-column title="行号" data-index="row" :width="70" align="center" />
-            <a-table-column title="用例名称" data-index="name" :width="180" :ellipsis="true" />
-            <a-table-column title="错误原因" data-index="error" :ellipsis="true" />
+            <a-table-column title="用例名称" data-index="name" :width="180" :ellipsis="true">
+              <template #cell="{ record }">
+                <span :title="record.name">{{ record.name }}</span>
+              </template>
+            </a-table-column>
+            <a-table-column title="错误原因" data-index="error" :ellipsis="true">
+              <template #cell="{ record }">
+                <span :title="record.error">{{ record.error }}</span>
+              </template>
+            </a-table-column>
           </template>
         </a-table>
       </div>

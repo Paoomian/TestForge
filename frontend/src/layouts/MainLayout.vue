@@ -107,6 +107,13 @@
             AI 生成用例
           </a-menu-item>
 
+          <a-menu-item key="scheduled-tasks">
+            <template #icon>
+              <icon-clock-circle />
+            </template>
+            定时任务
+          </a-menu-item>
+
           <a-sub-menu key="tools">
             <template #icon>
               <icon-tool />

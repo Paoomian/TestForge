@@ -371,3 +371,28 @@ export const runTestCase = (caseId: number, data: RunRequest) => {
     data
   })
 }
+
+export interface DebugRequest {
+  environment_id?: number
+  variables?: Record<string, string>
+  method: string
+  url: string
+  body_type: string
+  headers: { key: string; value: string; enabled: boolean }[]
+  query_params: { key: string; value: string; enabled: boolean }[]
+  body_form: { key: string; value: string; enabled: boolean }[]
+  body_raw?: string
+  auth: Record<string, any>
+  setup_script?: string
+  teardown_script?: string
+  assertions: { assertion_type: string; field?: string; operator: string; expected: string }[]
+  data_rules: Record<string, any>[]
+}
+
+export const debugTestCase = (data: DebugRequest) => {
+  return request<RunResult>({
+    url: '/test-runner/debug',
+    method: 'post',
+    data
+  })
+}

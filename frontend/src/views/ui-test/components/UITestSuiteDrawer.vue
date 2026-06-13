@@ -69,6 +69,8 @@
             {{ m.label }}
           </a-option>
         </a-select>
+        <a-button size="small" type="outline" @click="selectAllFiltered">全选筛选结果</a-button>
+        <a-button size="small" type="secondary" status="danger" @click="clearSelection">清空选择</a-button>
       </div>
 
       <!-- 用例表格 -->
@@ -129,24 +131,6 @@
               <a-option v-for="env in environments" :key="env.id" :value="env.id">
                 {{ env.name }}
               </a-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="浏览器">
-            <a-select v-model="form.browser">
-              <a-option value="chrome">Chrome</a-option>
-              <a-option value="firefox">Firefox</a-option>
-              <a-option value="edge">Edge</a-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="视口尺寸">
-            <a-select v-model="viewportSize">
-              <a-option value="1280x720">1280 x 720</a-option>
-              <a-option value="1920x1080">1920 x 1080</a-option>
-              <a-option value="375x812">iPhone</a-option>
             </a-select>
           </a-form-item>
         </a-col>
@@ -236,15 +220,6 @@ const form = reactive({
   tags: [] as string[],
 })
 
-// 视口尺寸
-const viewportSize = computed({
-  get: () => `${form.viewport_width}x${form.viewport_height}`,
-  set: (val: string) => {
-    const [w, h] = val.split('x').map(Number)
-    form.viewport_width = w
-    form.viewport_height = h
-  }
-})
 
 const submitting = ref(false)
 const isEdit = computed(() => !!props.editData)
@@ -357,11 +332,38 @@ async function loadCases() {
     if (selectorModule.value) filters.module = selectorModule.value
     const res = await getUICaseList(form.project_id, 0, 1000, filters)
     selectorCases.value = (res as any) || []
+
+    // 过滤掉已删除的用例ID（仅在非筛选状态下）
+    if (!selectorKeyword.value && !selectorPriority.value && !selectorModule.value) {
+      const validIds = new Set(selectorCases.value.map(c => c.id))
+      const filteredIds = form.case_ids.filter(id => validIds.has(id))
+      if (filteredIds.length !== form.case_ids.length) {
+        form.case_ids = filteredIds
+      }
+    }
   } catch (e) {
     console.error('加载用例列表失败:', e)
   } finally {
     selectorLoading.value = false
   }
+}
+
+/** 全选筛选结果 */
+function selectAllFiltered() {
+  const filteredIds = selectorCases.value.map(c => c.id)
+  const currentIds = new Set(form.case_ids)
+  const newIds = [...form.case_ids]
+  for (const id of filteredIds) {
+    if (!currentIds.has(id)) {
+      newIds.push(id)
+    }
+  }
+  form.case_ids = newIds
+}
+
+/** 清空选择 */
+function clearSelection() {
+  form.case_ids = []
 }
 
 async function handleProjectChange() {
@@ -464,5 +466,13 @@ async function handleSubmit() {
 
 .text-gray {
   color: var(--color-text-4);
+}
+
+:deep(.arco-form-item-content) {
+  width: 100%;
+}
+
+:deep(.arco-form-item-content-flex) {
+  width: 100%;
 }
 </style>

@@ -1,6 +1,16 @@
 <template>
   <div class="selected-case-list">
+    <div class="list-header">
+      <div class="header-title">
+        <icon-swap />
+        <span>执行顺序</span>
+        <a-tag size="small" color="blue">已选 {{ cases.length }} 个</a-tag>
+      </div>
+      <span class="header-hint">拖拽调整顺序</span>
+    </div>
+
     <div v-if="cases.length === 0" class="empty-state">
+      <icon-empty :size="32" />
       <span>暂未选择用例</span>
     </div>
 
@@ -17,10 +27,13 @@
         @drop="onDrop(index)"
         @dragend="onDragEnd"
       >
-        <icon-drag-dot-vertical class="drag-handle" />
-        <span class="case-index">{{ index + 1 }}</span>
+        <div class="drag-handle">
+          <icon-drag-dot-vertical />
+        </div>
+        <div class="case-index">{{ index + 1 }}</div>
         <span class="case-name" :title="caseItem.name">{{ caseItem.name }}</span>
         <a-tag size="small" color="blue">{{ caseItem.steps?.length || 0 }} 步</a-tag>
+        <a-tag size="small" :color="getPriorityColor(caseItem.priority)">{{ caseItem.priority || 'P1' }}</a-tag>
         <a-button
           type="text"
           size="mini"
@@ -96,38 +109,72 @@ function onDragEnd() {
   dragIndex.value = -1
   dragOverIndex.value = -1
 }
+
+function getPriorityColor(priority: string): string {
+  const colors: Record<string, string> = {
+    P0: 'red', P1: 'orange', P2: 'blue', P3: 'green'
+  }
+  return colors[priority] || 'gray'
+}
 </script>
 
 <style scoped>
 .selected-case-list {
+  width: 100%;
   border: 1px solid var(--color-border-2);
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-medium);
   overflow: hidden;
+  box-sizing: border-box;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--color-fill-1);
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-2);
+}
+
+.header-hint {
+  font-size: 12px;
+  color: var(--color-text-4);
 }
 
 .empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 32px;
   color: var(--color-text-4);
-  font-size: 12px;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .list-body {
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
 .case-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--color-border-1);
   background: var(--color-bg-white);
   cursor: grab;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .case-row:last-child {
@@ -153,20 +200,24 @@ function onDragEnd() {
 
 .drag-handle {
   color: var(--color-text-4);
-  font-size: 14px;
+  font-size: 16px;
   flex-shrink: 0;
   cursor: grab;
 }
 
+.drag-handle:active {
+  cursor: grabbing;
+}
+
 .case-index {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-fill-2);
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-text-2);
   flex-shrink: 0;

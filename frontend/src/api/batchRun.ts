@@ -67,6 +67,7 @@ export interface BatchRunListItem {
   id: number
   name: string
   status: string
+  test_type: string
   config_mode: string
   concurrency: number
   failure_strategy: string

@@ -110,6 +110,11 @@ const routes: RouteRecordRaw[] = [
         path: 'ai-generate',
         name: 'ai-generate',
         component: () => import('@/views/ai-generate/index.vue')
+      },
+      {
+        path: 'scheduled-tasks',
+        name: 'scheduled-tasks',
+        component: () => import('@/views/scheduled/ScheduledTaskList.vue')
       }
     ]
   }

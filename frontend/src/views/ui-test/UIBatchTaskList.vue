@@ -192,7 +192,7 @@ const columns = [
   { title: '结果', slotName: 'stats', width: 120 },
   { title: '耗时', slotName: 'duration', width: 100 },
   { title: '创建时间', slotName: 'created_at', width: 160 },
-  { title: '操作', slotName: 'actions', width: 150, fixed: 'right' as const }
+  { title: '操作', slotName: 'actions', width: 200, fixed: 'right' as const }
 ]
 
 // 日期分组

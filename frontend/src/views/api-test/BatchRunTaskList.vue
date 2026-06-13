@@ -396,7 +396,8 @@ const loadData = async () => {
       status: searchForm.status || undefined,
       config_mode: searchForm.config_mode || undefined
     })
-    tableData.value = res.items
+    // 过滤掉 UI 批量任务，只显示接口任务
+    tableData.value = res.items.filter(item => item.test_type !== 'ui_batch')
   } catch (e) {
     Message.error('加载任务列表失败')
   } finally {
