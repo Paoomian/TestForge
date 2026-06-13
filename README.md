@@ -120,6 +120,7 @@
 - **通过率**：环形图展示整体通过率，按任务类型分类统计
 - **最近执行**：展示最近执行记录，点击可跳转详情
 - **快捷入口**：常用功能快速访问
+- <img width="2559" height="1438" alt="仪表盘" src="https://github.com/user-attachments/assets/9c04a4dd-b557-46e5-9548-567a2ab7889d" />
 
 ---
 
@@ -133,6 +134,7 @@
 - **立即执行**：支持手动触发立即执行一次
 - **执行记录**：查看历史执行记录，跳转查看详情
 - **启用/禁用**：一键开关定时任务
+- <img width="2559" height="1438" alt="定时回归" src="https://github.com/user-attachments/assets/8fc50297-372e-4db3-a440-6a723e02a81c" />
 
 ---
 
@@ -145,6 +147,7 @@
 - **实时监控**：实时显示执行进度和日志
 - **异常捕获**：自动捕获崩溃、ANR 等异常
 - **报告生成**：生成测试报告，记录异常信息
+- <img width="2560" height="1380" alt="Monkey测试" src="https://github.com/user-attachments/assets/51ccc3a5-bb9c-44e0-a6fb-84f8d7f0cc77" />
 
 ---
 
