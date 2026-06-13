@@ -1,6 +1,6 @@
 # TestForge 测试平台
 
-一站式智能测试平台，覆盖 **UI 自动化测试**、**接口自动化测试**、**AI 生成用例**、**接口调试** 和 **开发工具箱**，助力团队高效保障软件质量。
+一站式智能测试平台，覆盖 **UI 自动化测试**、**接口自动化测试**、**AI 生成用例**、**接口调试**、**仪表盘**、**定时任务**、**Monkey 测试** 和 **开发工具箱**，助力团队高效保障软件质量。
 
 ## 功能特性
 
@@ -111,6 +111,43 @@
 
 ---
 
+### 仪表盘
+
+实时展示测试执行概况，帮助团队快速了解质量状态。
+
+- **统计概览**：项目总数、UI 用例数、接口用例数、今日执行数
+- **执行趋势**：近 7 天/30 天执行趋势图表，展示通过/失败/错误分布
+- **通过率**：环形图展示整体通过率，按任务类型分类统计
+- **最近执行**：展示最近执行记录，点击可跳转详情
+- **快捷入口**：常用功能快速访问
+
+---
+
+### 定时任务调度
+
+基于 Celery Beat 实现定时执行，支持可视化配置执行计划。
+
+- **可视化配置**：无需编写 Cron 表达式，选择执行频率即可（每天/工作日/每周/自定义间隔）
+- **统一管理**：支持 UI 自动化和接口自动化任务统一配置
+- **套件关联**：关联已有测试套件，套件变更自动同步
+- **立即执行**：支持手动触发立即执行一次
+- **执行记录**：查看历史执行记录，跳转查看详情
+- **启用/禁用**：一键开关定时任务
+
+---
+
+### Monkey 稳定性测试
+
+基于随机操作的稳定性测试工具，用于发现潜在的崩溃和异常。
+
+- **随机操作**：自动执行随机点击、滑动、输入等操作
+- **参数配置**：可配置操作间隔、事件总数、各事件比例
+- **实时监控**：实时显示执行进度和日志
+- **异常捕获**：自动捕获崩溃、ANR 等异常
+- **报告生成**：生成测试报告，记录异常信息
+
+---
+
 ### 开发工具
 
 集成 17 个测试开发常用工具，左侧分类导航，右侧即用即走。
@@ -124,9 +161,9 @@
 
 ## 技术栈
 
-**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · Playwright · httpx · PyMiniRacer · OpenAI SDK
+**后端** | FastAPI · SQLAlchemy · MySQL 8.0 · Redis · Celery · Celery Beat · Playwright · httpx · PyMiniRacer · OpenAI SDK · croniter
 
-**前端** | Vue 3 · TypeScript · Arco Design Vue · Pinia · ECharts · xlsx · ExcelJS
+**前端** | Vue 3 · TypeScript · Arco Design Vue · Pinia · ECharts · Monaco Editor · xlsx · ExcelJS
 
 ## 快速开始
 
@@ -166,8 +203,11 @@ python migrations/upgrade_all.py     # 升级已有数据库（自动转换 MyIS
 # 终端1：启动 FastAPI
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 终端2：启动 Celery Worker（批量执行需要）
+# 终端2：启动 Celery Worker（批量执行和定时任务需要）
 celery -A celery_app worker --loglevel=info
+
+# 终端3：启动 Celery Beat（定时任务调度需要，可选）
+celery -A celery_app beat --loglevel=info
 ```
 
 ### 前端
@@ -201,10 +241,17 @@ TestForge/
 │   ├── services/                  # 业务服务
 │   │   ├── ui_recorder.py         # UI 录制核心服务（Playwright）
 │   │   ├── ui_executor.py         # UI 用例执行器
+│   │   ├── ui_batch_runner.py     # UI 批量执行引擎
 │   │   ├── scene_runner.py        # 场景编排执行引擎
+│   │   ├── batch_runner.py        # 接口批量执行引擎
 │   │   ├── ai_service.py          # AI 模型调用
 │   │   └── ...
 │   ├── tasks/                     # Celery 任务
+│   │   ├── batch_run_task.py      # 接口批量执行任务
+│   │   ├── ui_batch_run_task.py   # UI 批量执行任务
+│   │   ├── scene_run_task.py      # 场景编排执行任务
+│   │   ├── scheduler_task.py      # 定时调度任务
+│   │   └── ai_generate_tasks.py   # AI 生成任务
 │   └── migrations/                # 数据库迁移
 ├── frontend/                      # 前端
 │   └── src/
@@ -214,6 +261,7 @@ TestForge/
 │       │   └── ...
 │       ├── components/           # 通用组件
 │       ├── views/
+│       │   ├── Dashboard.vue     # 仪表盘
 │       │   ├── ui-test/          # UI 自动化
 │       │   │   ├── Record.vue    # 录制页面
 │       │   │   ├── CaseList.vue  # 用例管理
@@ -221,6 +269,9 @@ TestForge/
 │       │   │   └── components/   # 子组件
 │       │   ├── api-test/         # 接口自动化
 │       │   ├── ai-generate/      # AI 生成
+│       │   ├── scheduled/        # 定时任务
+│       │   ├── reports/          # 测试报告
+│       │   ├── tools/            # 开发工具 & Monkey 测试
 │       │   └── ...
 │       ├── layouts/              # 布局组件
 │       ├── stores/               # 状态管理
