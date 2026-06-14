@@ -263,7 +263,7 @@ class UIBatchRunner:
                 # 修复双斜杠问题：base_url 末尾有 / 且步骤 URL 开头有 / 时会产生 //
                 url = url.replace("://", "\x00").replace("//", "/").replace("\x00", "://")
                 logger.info(f"导航到: {url}")
-                await self._page.goto(url, wait_until="networkidle", timeout=30000)
+                await self._page.goto(url, wait_until="load", timeout=30000)
                 message = f"导航到 {url}"
 
             elif action == "click":

@@ -4,7 +4,7 @@
     <div class="welcome-banner">
       <div class="banner-content">
         <div class="banner-text">
-          <h1 class="banner-title">Good {{ timeOfDay }}，{{ username }} 👋</h1>
+          <h1 class="banner-title">{{ timeOfDay }}好，{{ username }} 👋</h1>
           <p class="banner-desc">这是你的测试工作台概览，今天也要加油哦！</p>
         </div>
         <div class="banner-actions">

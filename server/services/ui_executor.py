@@ -257,9 +257,7 @@ class UIExecutor:
         try:
             if action == "navigate":
                 url = step.get("url", "")
-                await self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                # 等待页面加载完成
-                await self._page.wait_for_load_state("networkidle", timeout=10000)
+                await self._page.goto(url, wait_until="load", timeout=30000)
                 result["success"] = True
                 result["message"] = f"导航到 {url}"
 

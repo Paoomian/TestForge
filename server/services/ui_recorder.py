@@ -368,7 +368,9 @@ class UIRecorder:
     async def _inject_event_async(self, event: dict):
         """异步注入事件"""
         event_type = event.get("type")
-        print(f"[EVENT] 收到事件: type={event_type}, action={event.get('action')}")
+        # 只打印非鼠标移动事件，减少日志噪音
+        if event_type != "mouse_event" or event.get("action") != "mousemove":
+            print(f"[EVENT] 收到事件: type={event_type}, action={event.get('action')}")
         try:
             if event_type == "mouse_event":
                 await self._handle_mouse_event(event)
@@ -479,8 +481,6 @@ class UIRecorder:
         is_dragging = event.get("isDragging", False)
         is_click = event.get("isClick", False)
 
-        print(f"[MOUSE_EVENT] action={action}, x={x}, y={y}, isClick={is_click}")
-
         if action == "scroll":
             # 处理滚轮事件
             delta_x = event.get("deltaX", 0)
@@ -493,13 +493,11 @@ class UIRecorder:
                 "deltaY": delta_y,
             })
         elif action == "mousedown":
-            print(f"[MOUSE_EVENT] 执行 mousedown at ({x}, {y})")
             await self._page.mouse.move(x, y)
             await self._page.mouse.down()
             # 记录拖拽起点
             self._drag_start = {"x": x, "y": y}
             self._drag_path = [{"x": x, "y": y}]
-            print(f"[MOUSE_EVENT] mousedown 执行完成")
         elif action == "mousemove":
             await self._page.mouse.move(x, y)
             # 如果正在拖拽，记录拖拽路径点
@@ -508,7 +506,6 @@ class UIRecorder:
             elif is_dragging:
                 self._drag_path = [{"x": self._drag_start.get("x", x), "y": self._drag_start.get("y", y)}, {"x": x, "y": y}]
         elif action == "mouseup":
-            print(f"[MOUSE_EVENT] mouseup: isClick={is_click}, isDragging={is_dragging}, drag_path_len={len(self._drag_path) if hasattr(self, '_drag_path') else 0}")
             # 如果是拖拽操作结束
             if is_dragging and hasattr(self, '_drag_path') and len(self._drag_path) > 1:
                 await self._page.mouse.up()
@@ -526,7 +523,6 @@ class UIRecorder:
             elif is_click:
                 # 先获取元素信息
                 element_info = await self._get_element_at_point(x, y)
-                print(f"[MOUSE_EVENT] element_info: {element_info is not None}")
 
                 if element_info:
                     # 检查是否点击了输入框
@@ -557,9 +553,7 @@ class UIRecorder:
                         print(f"[INPUT] 检测到输入框，等待用户输入: {element_info.get('selector')}")
                     else:
                         # 执行 up（mousedown 已经执行了 down）
-                        print(f"[MOUSE_EVENT] 执行 mouseup at ({x}, {y})")
                         await self._page.mouse.up()
-                        print(f"[MOUSE_EVENT] mouseup 执行成功")
                         # 点击后短暂延迟，让页面有时间响应（如下拉框展开）
                         await asyncio.sleep(0.3)
                 else:

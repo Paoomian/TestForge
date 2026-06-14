@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -6,6 +6,11 @@ from database import Base
 
 class APITestCase(Base):
     __tablename__ = "api_test_cases"
+    __table_args__ = (
+        Index("idx_case_project_module", "project_id", "module"),
+        Index("idx_case_project_id", "project_id"),
+        Index("idx_case_module", "module"),
+    )
 
     # 基础字段
     id = Column(Integer, primary_key=True, index=True)
